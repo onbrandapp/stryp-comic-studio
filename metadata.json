@@ -1,0 +1,7 @@
+{
+  "name": "Stryp Comic Studio",
+  "description": "A next-gen comic creation studio featuring AI-powered scripting, consistent character visualization, and motion comic generation with voiceovers.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

@@ -1,0 +1,378 @@
+
+import { GoogleGenAI, Type, Modality, GenerateContentResponse, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { Character, Panel, Location } from '../types';
+
+// Helper to wrap promises with a timeout
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  let timeoutId: any;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timeoutId);
+      return res;
+    }),
+    timeoutPromise
+  ]);
+}
+
+// Optimized helper to fetch media (image/video) and convert to base64 with mime type
+async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data: string }> {
+  // Optimization: If it's already a data URI, parse it directly
+  if (url.startsWith('data:')) {
+    const commaIndex = url.indexOf(',');
+    const header = url.substring(0, commaIndex);
+    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+    const data = url.substring(commaIndex + 1);
+    return { mimeType, data };
+  }
+
+  // WRAPPED IN TIMEOUT: Enforce strict 10s limit for media fetching (videos can be larger)
+  return withTimeout((async () => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch(url, {
+        credentials: 'omit',
+        signal: controller.signal
+      });
+      clearTimeout(id);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      return await new Promise<{ mimeType: string; data: string }>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          if (!result) {
+            reject(new Error("Empty result"));
+            return;
+          }
+          const commaIndex = result.indexOf(',');
+          if (commaIndex === -1) {
+            reject(new Error("Invalid data"));
+            return;
+          }
+          const header = result.substring(0, commaIndex);
+          const base64 = result.substring(commaIndex + 1);
+          // Trust the blob type first, fallback to header
+          const mimeType = blob.type || header.match(/:(.*?);/)?.[1] || 'image/png';
+          resolve({ mimeType, data: base64 });
+        };
+        reader.onerror = () => reject(new Error("FileReader failed"));
+        reader.readAsDataURL(blob);
+      });
+
+    } catch (error) {
+      clearTimeout(id);
+      console.warn("Media fetch failed. If this is a CORS error, you may need to configure your storage bucket.", error);
+      throw error;
+    }
+  })(), 60000, "Media fetch timed out (60s). File might be too large or connection too slow.");
+}
+
+
+class GeminiService {
+  private getClient() {
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  }
+
+  // Generate a script (list of panels)
+  async generateScript(
+    sceneDescription: string,
+    mood: string,
+    characters: Character[],
+    existingContext: string
+  ): Promise<Partial<Panel>[]> {
+
+    const characterContext = characters
+      .map(c => `${c.name}: ${c.bio}`)
+      .join('\n');
+
+    const prompt = `
+      Create a comic strip script.
+      Context: ${existingContext}
+      Scene Description: ${sceneDescription}
+      Mood: ${mood}
+      Characters available:
+      ${characterContext}
+
+      Output a JSON array of panels. Each panel must have:
+      - "description": A detailed visual description for an image generator. Include specific camera angles (e.g., 'Wide shot', 'Close up') and lighting details.
+      - "dialogue": The text spoken in the panel (or caption).
+      - "characterName": The name of the character speaking (if any).
+    `;
+
+    try {
+      const response = await this.getClient().models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                description: { type: Type.STRING },
+                dialogue: { type: Type.STRING },
+                characterName: { type: Type.STRING },
+              },
+              required: ['description', 'dialogue']
+            }
+          }
+        }
+      });
+
+      const data = JSON.parse(response.text || '[]');
+
+      return data.map((item: any) => {
+        const char = characters.find(c => c.name.toLowerCase() === item.characterName?.toLowerCase());
+        return {
+          description: item.description,
+          dialogue: item.dialogue,
+          characterId: char ? char.id : undefined,
+        };
+      });
+
+    } catch (error) {
+      console.error("Script generation failed:", error);
+      throw error;
+    }
+  }
+
+  // Helper to get a visual description from a Location (Images or Videos)
+  async getLocationVisualDescription(mediaItems: { url: string, type: 'image' | 'video' }[]): Promise<string> {
+    if (!mediaItems || mediaItems.length === 0) return '';
+
+    try {
+      const parts: any[] = [];
+
+      // Fetch all media items
+      for (const item of mediaItems) {
+        try {
+          const media = await fetchMediaAsBase64(item.url);
+          parts.push({ inlineData: { mimeType: media.mimeType, data: media.data } });
+        } catch (e) {
+          console.warn("Skipping failed media item:", item.url, e);
+        }
+      }
+
+      if (parts.length === 0) throw new Error("No media could be loaded");
+
+      const prompt = `Analyze these ${mediaItems.length} images/videos in detail for use as a background location reference in a comic book generation prompt.
+      
+      These items represent different angles or details of the SAME location. Combine them to create one unified visual description.
+      
+      Describe the:
+      1. Lighting (Time of day, direction, color, intensity)
+      2. Color Palette (Dominant colors, mood)
+      3. Environment/Setting (Indoors/Outdoors, key landmarks, architecture, nature elements)
+      4. Atmosphere (Peaceful, chaotic, futuristic, rustic, etc.)
+      5. Textures and Materials (Wood, stone, neon, water, etc.)
+
+      Do NOT describe any people or characters in the scene. Focus ONLY on the location/background.
+      Keep it descriptive but concise.`;
+
+      parts.push({ text: prompt });
+
+      const response = await this.getClient().models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: { parts }
+      });
+
+      return response.text || '';
+    } catch (error) {
+      console.warn("Failed to get location description:", error);
+      throw error;
+    }
+  }
+
+  // Helper to get a visual description from an image using Gemini Vision
+  async getCharacterVisualDescription(character: Character): Promise<string> {
+    if (!character.imageUrl) return character.bio || '';
+
+    try {
+      const parts: any[] = [];
+
+      // Add first image
+      const img1 = await fetchMediaAsBase64(character.imageUrl);
+      parts.push({ inlineData: { mimeType: img1.mimeType, data: img1.data } });
+
+      // Add second image if it exists
+      if (character.imageUrl2) {
+        try {
+          const img2 = await fetchMediaAsBase64(character.imageUrl2);
+          parts.push({ inlineData: { mimeType: img2.mimeType, data: img2.data } });
+        } catch (e) {
+          console.warn("Failed to fetch second image:", e);
+        }
+      }
+
+      const prompt = `Describe this character's physical appearance in detail for an image generator prompt. 
+      Focus on hair, eyes, clothing, facial features, and style. 
+      If there are two images, combine the details to create a consistent description.
+      Ignore the background. 
+      Keep it concise but descriptive.`;
+
+      parts.push({ text: prompt });
+
+      const response = await this.getClient().models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: { parts }
+      });
+
+      return response.text || character.bio || '';
+    } catch (error) {
+      console.warn("Failed to get visual description:", error);
+      return character.bio || '';
+    }
+  }
+
+  // Generate an image for a panel
+  async generatePanelImage(
+    panelDescription: string,
+    character?: Character,
+    location?: Location
+  ): Promise<string> {
+    try {
+      let prompt = '';
+      let visualDescription = '';
+      let locationContext = '';
+
+      // 1. Process Location Context
+      if (location && location.visualDescription) {
+        locationContext = `
+          SETTING / LOCATION REFERENCE:
+          ${location.visualDescription}
+          
+          Start the scene with this setting. Ensure the background matches this description accurately.
+        `;
+      }
+
+      // 2. Get Visual Description if character exists
+      if (character) {
+        // Use the bio as a fallback or base, but try to get a visual description
+        visualDescription = await this.getCharacterVisualDescription(character);
+
+        prompt = `
+(Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
+
+(Subject & Action): Character Name: "${character.name}". 
+Character Appearance: ${visualDescription}.
+Action: ${panelDescription}
+
+(Setting): ${locationContext ? locationContext : 'Background matches the mood/action.'}
+IMPORTANT: The background MUST match the Setting description accurately.
+
+(Style): 3D Pixar-style animation.`;
+      } else {
+        prompt = `
+(Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
+
+(Scene Description): ${panelDescription}. 
+
+(Setting): ${locationContext ? locationContext : 'Background matches the mood/action.'}
+IMPORTANT: The background MUST match the Setting description accurately.
+
+(Style): 3D Pixar-style animation.`;
+      }
+
+      console.log("Generating image with prompt:", prompt);
+
+      try {
+        // Use proper SDK method for @google/genai
+        const result = await withTimeout<any>(
+          // @ts-ignore
+          this.getClient().models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: [{
+              role: 'user',
+              parts: [{ text: "Generate an image based on this description:\n\n" + prompt }]
+            }],
+            config: {
+              safetySettings: [
+                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+              ]
+            }
+          }),
+          90000,
+          "Image generation timed out"
+        );
+
+        // Result from new SDK might be the response itself or contain it
+        const response = result.response || result;
+        const candidates = response.candidates;
+
+        if (!candidates || candidates.length === 0) {
+          throw new Error("No candidates returned");
+        }
+
+        // Check for inlineData (image)
+        // Access safely with optional chaining
+        const parts = candidates[0].content?.parts;
+        const imagePart = parts?.find((p: any) => p.inlineData);
+
+        if (imagePart && imagePart.inlineData) {
+          return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
+        }
+
+        throw new Error("No image generated in response. The model may have returned text instead.");
+
+      } catch (error: any) {
+        console.error("Image generation error:", error);
+        if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota") || error.message?.toLowerCase().includes("limit") || error.message?.includes("RESOURCE_EXHAUSTED")) {
+          throw new Error("Quota exceeded: You have reached your API limit for image generation. Please try again later or check your billing details.");
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error("Panel generation process failed:", error);
+      throw error;
+    }
+  }
+
+  // Generate TTS audio
+  async generateSpeech(text: string, voiceName: string = 'Puck'): Promise<string> {
+    try {
+      // Wrapped in timeout to prevent hanging if the API is slow
+      const response = await withTimeout<GenerateContentResponse>(
+        this.getClient().models.generateContent({
+          model: 'gemini-2.0-flash-exp', // Updated to known working model
+          contents: { parts: [{ text }] },
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName }
+              }
+            }
+          }
+        }),
+        20000, // 20s timeout for audio
+        "Audio generation timed out"
+      );
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!base64Audio) throw new Error("No audio generated");
+
+      return `data:audio/wav;base64,${base64Audio}`;
+
+    } catch (error) {
+      console.error("Speech generation failed:", error);
+      throw new Error("Audio generation is currently not supported by the available Gemini models for this API key. Please check back later.");
+    }
+  }
+}
+
+export const gemini = new GeminiService();
