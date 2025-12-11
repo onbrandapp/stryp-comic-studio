@@ -220,7 +220,6 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       console.error("Failed to update project", error);
       alert("Failed to save project changes");
     } finally {
-    } finally {
       setIsUpdatingProject(false);
     }
   };
