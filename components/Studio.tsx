@@ -66,12 +66,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   const [editProjectSummary, setEditProjectSummary] = useState(project.summary);
   const [editSceneDesc, setEditSceneDesc] = useState(project.sceneDescription || '');
   const [editMood, setEditMood] = useState(project.mood || '');
-  const [editSelectedCharacterIds, setEditSelectedCharacterIds] = useState<Set<string>>(() => {
-    if (project.selectedCharacterIds) {
-      return new Set(project.selectedCharacterIds);
-    }
-    return new Set(); // Default to NONE
-  });
+  const [editSelectedCharacterIds, setEditSelectedCharacterIds] = useState<Set<string>>(new Set(project.selectedCharacterIds ? Array.from(project.selectedCharacterIds) : []));
+  const [editActiveLocationId, setEditActiveLocationId] = useState('');
   const [isUpdatingProject, setIsUpdatingProject] = useState(false);
 
   // Generator State
@@ -200,6 +196,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       setSceneDesc(editSceneDesc);
       setMood(editMood);
       setSelectedCharacterIds(new Set(editSelectedCharacterIds));
+      setActiveLocationId(editActiveLocationId);
 
       if (onUpdateProject) {
         onUpdateProject({
@@ -1334,19 +1331,19 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           )}
         </div>
       </div>
-      {isEditProjectModalOpen && createPortal(
+      {showEditProjectModal && createPortal(
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center sm:p-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsEditProjectModalOpen(false)}
+            onClick={() => setShowEditProjectModal(false)}
           />
 
           {/* Modal / Drawer Content */}
           <div className="bg-slate-900 border-t md:border border-slate-800 rounded-t-2xl md:rounded-2xl w-full md:max-w-lg shadow-2xl relative animate-slide-up md:animate-in md:fade-in md:zoom-in duration-200 max-h-[90vh] flex flex-col z-10">
             <div className="p-6 overflow-y-auto custom-scrollbar">
               <button
-                onClick={() => setIsEditProjectModalOpen(false)}
+                onClick={() => setShowEditProjectModal(false)}
                 className="absolute top-4 right-4 text-slate-500 hover:text-white"
               >
                 <X size={20} />
@@ -1418,18 +1415,59 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                                     return newSet;
                                   });
                                 }}
-                                className={`flex items-center gap-2 p-1.5 rounded border cursor-pointer transition-all ${isSelected
-                                  ? 'bg-indigo-900/40 border-indigo-500/50'
-                                  : 'bg-slate-900/30 border-transparent opacity-60 hover:opacity-100 hover:bg-slate-800'
-                                  }`}
+                                className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer transition-colors border ${isSelected ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'}`}
                               >
-                                <img src={c.imageUrl} className={`w-5 h-5 rounded-full object-cover ${isSelected ? 'ring-1 ring-indigo-400' : ''}`} alt={c.name} />
-                                <span className={`text-[10px] ${isSelected ? 'text-white font-medium' : 'text-slate-400'}`}>{c.name}</span>
+                                <div className="w-8 h-8 rounded-full bg-slate-800 overflow-hidden shrink-0">
+                                  <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
+                                </div>
+                                <span className="text-xs font-bold truncate">{c.name}</span>
+                                {isSelected && <Check size={12} className="ml-auto text-indigo-400" />}
                               </div>
                             );
                           })}
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Selection */}
+                <div>
+                  <label className="text-xs text-slate-500 uppercase font-bold mb-1 block">Location Concept</label>
+                  <div className="bg-slate-950 border border-slate-700 rounded-lg p-2 overflow-y-auto max-h-[120px]">
+                    <div className="grid grid-cols-1 gap-1.5">
+                      <div
+                        onClick={() => setEditActiveLocationId('')}
+                        className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer transition-colors border ${!editActiveLocationId ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                      >
+                        <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center shrink-0">
+                          <MapPin size={16} />
+                        </div>
+                        <span className="text-xs font-bold truncate">None (Use Scene Desc)</span>
+                        {!editActiveLocationId && <Check size={12} className="ml-auto text-indigo-400" />}
+                      </div>
+
+                      {locations.map(loc => {
+                        const isSelected = editActiveLocationId === loc.id;
+                        const mediaUrl = (loc.media && loc.media.length > 0) ? loc.media[0].url : loc.mediaUrl;
+                        return (
+                          <div
+                            key={loc.id}
+                            onClick={() => setEditActiveLocationId(loc.id)}
+                            className={`p-2 rounded-lg flex items-center gap-2 cursor-pointer transition-colors border ${isSelected ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                          >
+                            <div className="w-8 h-8 rounded bg-slate-800 overflow-hidden shrink-0">
+                              {mediaUrl ? (
+                                <img src={mediaUrl} alt={loc.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><ImageIcon size={14} /></div>
+                              )}
+                            </div>
+                            <span className="text-xs font-bold truncate">{loc.name}</span>
+                            {isSelected && <Check size={12} className="ml-auto text-indigo-400" />}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
