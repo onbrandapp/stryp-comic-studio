@@ -26,6 +26,7 @@ import { Project, Character, ViewState, ComicMode, AVAILABLE_VOICES, Panel, AppS
 import CharacterVault from './components/CharacterVault';
 import LocationVault from './components/LocationVault';
 import Studio from './components/Studio';
+import Settings from './components/Settings';
 import {
   auth,
   loginWithGoogle,
@@ -422,75 +423,12 @@ const App = () => {
         );
       case ViewState.SETTINGS:
         return (
-          <div className="p-4 md:p-8 max-w-4xl mx-auto animate-fade-in">
-            <h1 className="text-2xl md:text-3xl font-bold text-white mb-6 md:mb-8">Settings</h1>
-
-            <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
-                <h2 className="text-lg md:text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                  <Mic className="text-indigo-400" size={20} /> Audio Defaults
-                </h2>
-                <div className="w-full md:max-w-md">
-                  <label className="block text-sm font-medium text-slate-400 mb-2">Default Narrator Voice</label>
-                  <p className="text-xs text-slate-500 mb-3">Used for captions where no character is assigned.</p>
-                  <select
-                    value={settings.defaultNarratorVoiceId}
-                    onChange={(e) => updateSettings({ ...settings, defaultNarratorVoiceId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    {AVAILABLE_VOICES.map(voice => (
-                      <option key={voice.id} value={voice.id}>{voice.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
-                <h2 className="text-lg md:text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                  <Play className="text-indigo-400" size={20} /> Playback Settings
-                </h2>
-                <div className="w-full md:max-w-md">
-                  <label className="block text-sm font-medium text-slate-400 mb-2">
-                    Panel Duration: {(settings.panelDelay || 2000) / 1000} seconds
-                  </label>
-                  <p className="text-xs text-slate-500 mb-3">How long each panel stays on screen during playback and export.</p>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="1000"
-                      max="10000"
-                      step="500"
-                      value={settings.panelDelay || 2000}
-                      onChange={(e) => updateSettings({ ...settings, panelDelay: parseInt(e.target.value) })}
-                      className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                    />
-                    <span className="text-sm font-mono text-indigo-400 w-12 text-right shrink-0">
-                      {(settings.panelDelay || 2000) / 1000}s
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
-                <h2 className="text-lg md:text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                  <Users className="text-indigo-400" size={20} /> Account
-                </h2>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="overflow-hidden">
-                    <p className="text-white font-medium truncate">Logged in as {user.email}</p>
-                    <p className="text-sm text-slate-500">Your data is synced to this account.</p>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="w-full md:w-auto px-4 py-2 bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <LogOut size={16} /> Sign Out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <Settings
+            settings={settings}
+            user={user}
+            onUpdateSettings={updateSettings}
+            onLogout={logout}
+          />
         );
       case ViewState.LOCATIONS:
         return (
