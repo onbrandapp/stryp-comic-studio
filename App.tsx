@@ -18,7 +18,8 @@ import {
   Play,
   MapPin,
   Menu,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
