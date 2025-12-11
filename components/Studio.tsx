@@ -25,7 +25,9 @@ import {
   Pencil,
   Check,
   Plus,
-  MapPin
+  MapPin,
+  Film,
+  ChevronDown
 } from 'lucide-react';
 import { Project, Character, Panel, AVAILABLE_VOICES, AppSettings, Location } from '../types';
 import { gemini } from '../services/geminiService';
@@ -58,7 +60,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   const [isSavingProject, setIsSavingProject] = useState(false);
 
   // Edit Project State
-  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showEditProjectModal, setShowEditProjectModal] = useState(false);
   const [editProjectTitle, setEditProjectTitle] = useState(project.title);
   const [editProjectSummary, setEditProjectSummary] = useState(project.summary);
   const [editSceneDesc, setEditSceneDesc] = useState(project.sceneDescription || '');
@@ -825,19 +828,80 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
               <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2">
                 <MapPin size={12} /> Active Location Concept
               </label>
-              <select
-                value={activeLocationId}
-                onChange={(e) => setActiveLocationId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none"
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white text-left flex items-center justify-between hover:border-indigo-500 transition-colors"
               >
-                <option value="">None (Use Scene Desc only)</option>
-                {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} {loc.mediaType === 'video' ? '(Video)' : ''}
-                  </option>
-                ))}
-              </select>
+                <span className="truncate">
+                  {activeLocationId ? locations.find(l => l.id === activeLocationId)?.name || 'Unknown Location' : 'None (Use Scene Desc only)'}
+                </span>
+                <ChevronDown size={14} className="text-slate-500" />
+              </button>
             </div>
+
+            {/* Location Picker Drawer */}
+            {showLocationPicker && (
+              <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                <div
+                  className="absolute inset-0 sm:hidden"
+                  onClick={() => setShowLocationPicker(false)}
+                />
+                <div className="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-slide-up">
+                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-t-2xl">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                      <MapPin size={16} className="text-indigo-400" /> Select Location
+                    </h3>
+                    <button onClick={() => setShowLocationPicker(false)} className="p-1 hover:bg-slate-800 rounded-full text-slate-400">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="p-2 overflow-y-auto custom-scrollbar space-y-2">
+                    <button
+                      onClick={() => { setActiveLocationId(''); setShowLocationPicker(false); }}
+                      className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all ${!activeLocationId ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
+                    >
+                      <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center text-slate-500 border border-slate-800">
+                        <MapPin size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-sm text-white">None</p>
+                        <p className="text-xs text-slate-500">Use scene description only</p>
+                      </div>
+                      {!activeLocationId && <div className="ml-auto text-indigo-400"><Check size={16} /></div>}
+                    </button>
+
+                    {locations.map(loc => {
+                      const isActive = activeLocationId === loc.id;
+                      const mediaUrl = (loc.media && loc.media.length > 0) ? loc.media[0].url : loc.mediaUrl;
+
+                      return (
+                        <button
+                          key={loc.id}
+                          onClick={() => { setActiveLocationId(loc.id); setShowLocationPicker(false); }}
+                          className={`w-full p-2 rounded-xl flex items-center gap-3 transition-all ${isActive ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-black overflow-hidden border border-slate-800 shrink-0">
+                            {mediaUrl ? (
+                              <img src={mediaUrl} alt={loc.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                <ImageIcon size={16} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-left min-w-0 flex-1">
+                            <p className="font-bold text-sm text-white truncate">{loc.name}</p>
+                            <p className="text-xs text-slate-500 truncate">{loc.description || "No description"}</p>
+                          </div>
+                          {isActive && <div className="ml-auto text-indigo-400 shrink-0"><Check size={16} /></div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleGenerateScript}
