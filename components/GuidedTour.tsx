@@ -1,70 +1,99 @@
 import { useEffect } from 'react';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
+import { ViewState } from '../types';
 
 interface GuidedTourProps {
     startOnMount?: boolean;
 }
 
-export const runTour = () => {
-    const tourDriver = driver({
+export const runTour = (currentView: ViewState) => {
+    const driverObj = driver({
         showProgress: true,
-        steps: [
+        steps: []
+    });
+
+    if (currentView === ViewState.DASHBOARD) {
+        driverObj.setSteps([
             {
                 popover: {
                     title: 'Welcome to Stryp Comic Studio!',
-                    description: 'This guided tour will walk you through the basics of creating your first AI-generated comic strip.'
+                    description: 'This is your dashboard where you can manage all your comic projects.'
+                }
+            },
+            {
+                element: 'button:has(.lucide-plus)', // Target "New Project" button
+                popover: {
+                    title: 'Start Creating',
+                    description: 'Click "New Project" to start your first comic strip or motion video.'
+                }
+            }
+        ]);
+    } else if (currentView === ViewState.STUDIO) {
+        driverObj.setSteps([
+            {
+                popover: {
+                    title: 'Studio Tour',
+                    description: 'Welcome to the editor! Let\'s walk through the creation process.'
                 }
             },
             {
                 element: 'textarea[placeholder*="Describe the"]',
                 popover: {
                     title: '1. Describe Your Scene',
-                    description: 'Start by typing a detailed description of what you want to see in your comic panel here. Be specific about lighting, mood, and action.'
+                    description: 'Type a visual description of your panel here. Be specific about action, lighting, and mood.'
                 }
             },
             {
-                element: '.grid-cols-2 > button:first-child', // Assuming "Characters" is the first tab/button or distinct area
+                element: 'button:has(.lucide-users)',
                 popover: {
-                    title: '2. Choose Characters',
-                    description: 'Click here to create or select persistent characters. This ensures your characters look consistent across all panels.'
+                    title: '2. Select Characters',
+                    description: 'Choose which characters appear in this panel. You can create consistent characters in the Vault.'
                 }
             },
             {
-                element: 'button:has(.lucide-wand-2)', // Using Lucide icon class for "Generate"
+                element: 'button:has(.lucide-wand-2)',
                 popover: {
-                    title: '3. Generate Magic',
-                    description: 'Once you are happy with your setup, click Generate. The AI will create your image, dialogue options, and even audio.'
+                    title: '3. Generate',
+                    description: 'Click Generate to create the image (and audio/dialogue if enabled).'
                 }
             },
             {
-                element: '.overflow-y-auto', // The timeline area
+                element: '.overflow-y-auto',
                 popover: {
-                    title: '4. Your Comic Timeline',
-                    description: 'Generated panels appear here. You can drag to reorder them, edit the text, or regenerate them if needed.'
-                }
-            },
-            {
-                popover: {
-                    title: 'You are ready!',
-                    description: 'That covers the basics. Have fun creating your story!'
+                    title: '4. Timeline',
+                    description: 'Your generated panels appear here. Drag to reorder, click to edit.'
                 }
             }
-        ]
-    });
+        ]);
+    } else {
+        // Fallback or other views
+        driverObj.setSteps([
+            {
+                popover: {
+                    title: 'Stryp Comic Studio',
+                    description: 'Explore the features using the sidebar menu.'
+                }
+            }
+        ]);
+    }
 
-    tourDriver.drive();
+    driverObj.drive();
 };
 
 export const GuidedTour = ({ startOnMount = false }: GuidedTourProps) => {
     useEffect(() => {
         const hasSeenTour = localStorage.getItem('hasSeenTour');
 
+        // Only auto-start if we are in a context that makes sense (e.g., usually the Dashboard on first load)
+        // We assume the app loads to Dashboard.
         if (startOnMount && !hasSeenTour) {
-            runTour();
+            runTour(ViewState.DASHBOARD);
             localStorage.setItem('hasSeenTour', 'true');
         }
     }, [startOnMount]);
 
-    return null; // This component handles side effects only
+    return null;
 };
+
+export default GuidedTour;

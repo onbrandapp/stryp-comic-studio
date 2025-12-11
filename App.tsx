@@ -21,6 +21,7 @@ import {
   X,
   HelpCircle
 } from 'lucide-react';
+import GuidedTour, { runTour } from './components/GuidedTour';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 import { Project, Character, ViewState, ComicMode, AVAILABLE_VOICES, Panel, AppSettings } from './types';
@@ -524,6 +525,7 @@ const App = () => {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+      <GuidedTour />
       {/* Mobile Sidebar Overlay */}
       {showMobileMenu && (
         <div className="fixed inset-0 z-40 lg:hidden text-white">
@@ -577,6 +579,13 @@ const App = () => {
                 <SettingsIcon size={20} />
                 <span className="font-medium">Settings</span>
               </button>
+              <button
+                onClick={() => { runTour(view); setShowMobileMenu(false); }}
+                className="w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors text-slate-500 hover:bg-slate-800 hover:text-white"
+              >
+                <HelpCircle size={20} />
+                <span className="font-medium">Start Tour</span>
+              </button>
             </div>
           </aside>
         </div>
@@ -626,6 +635,13 @@ const App = () => {
           >
             <SettingsIcon size={20} />
             <span className="font-medium">Settings</span>
+          </button>
+          <button
+            onClick={() => runTour(view)}
+            className="w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors text-slate-500 hover:bg-slate-800 hover:text-white"
+          >
+            <HelpCircle size={20} />
+            <span className="font-medium">Start Tour</span>
           </button>
         </div>
       </aside>
