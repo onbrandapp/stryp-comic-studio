@@ -50,10 +50,10 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   const [panelStates, setPanelStates] = useState<Record<string, string>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(() => {
-    if (project.selectedCharacterIds && project.selectedCharacterIds.length > 0) {
+    if (project.selectedCharacterIds) {
       return new Set(project.selectedCharacterIds);
     }
-    return new Set(characters.map(c => c.id));
+    return new Set(); // Default to NONE
   });
   const [isSavingProject, setIsSavingProject] = useState(false);
 
@@ -64,10 +64,10 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   const [editSceneDesc, setEditSceneDesc] = useState(project.sceneDescription || '');
   const [editMood, setEditMood] = useState(project.mood || '');
   const [editSelectedCharacterIds, setEditSelectedCharacterIds] = useState<Set<string>>(() => {
-    if (project.selectedCharacterIds && project.selectedCharacterIds.length > 0) {
+    if (project.selectedCharacterIds) {
       return new Set(project.selectedCharacterIds);
     }
-    return new Set(characters.map(c => c.id));
+    return new Set(); // Default to NONE
   });
   const [isUpdatingProject, setIsUpdatingProject] = useState(false);
 
@@ -110,16 +110,9 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
   // Update selection if characters change (e.g. added new one)
   useEffect(() => {
-    setSelectedCharacterIds(prev => {
-      const newSet = new Set(prev);
-      characters.forEach(c => {
-        // Only add new characters if we are initializing or if the user hasn't explicitly deselected them?
-        // For now, let's keep the behavior of adding new characters to selection to avoid confusion.
-        if (!prev.has(c.id) && !project.selectedCharacterIds) newSet.add(c.id);
-      });
-      return newSet;
-    });
-  }, [characters.length, project.selectedCharacterIds]);
+    // Only verify we aren't losing state, but do NOT auto-select new characters
+    // Logic removed to prevent auto-selecting unintended characters
+  }, [characters.length]);
 
   // Update local generator state if project updates from outside (e.g. initial load)
   useEffect(() => {
