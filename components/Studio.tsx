@@ -931,11 +931,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           </div>
 
           <button
-            onClick={handleOpenEditModal}
-            className="md:hidden p-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-full text-white shadow-lg shadow-indigo-500/30"
-            title="Open AI Generator"
+            onClick={() => setShowMobileTools(true)}
+            className="md:hidden p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg shadow-sm"
+            title="Open Tools"
           >
-            <Wand2 size={20} />
+            <Menu size={20} />
           </button>
         </div>
 
@@ -1012,9 +1012,13 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         </div>
 
         {/* Mobile Tools Drawer */}
+        {/* Mobile Tools Drawer (Left Side) */}
         {showMobileTools && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/80 backdrop-blur-sm md:hidden animate-fade-in">
-            <div className="w-[85vw] max-w-sm bg-slate-950 h-full border-l border-slate-800 shadow-2xl p-4 flex flex-col">
+          <div className="fixed inset-0 z-50 flex justify-start bg-black/80 backdrop-blur-sm md:hidden animate-in fade-in duration-200">
+            {/* Backdrop click to close */}
+            <div className="absolute inset-0" onClick={() => setShowMobileTools(false)} />
+
+            <div className="w-[85vw] max-w-sm bg-slate-950 h-full border-r border-slate-800 shadow-2xl p-4 flex flex-col relative z-10 animate-slide-right">
               <div className="flex justify-between items-center mb-6 shrink-0">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <Wand2 className="text-cyan-400" /> Studio Tools

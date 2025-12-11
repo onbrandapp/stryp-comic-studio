@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Pencil,
   Play,
-  MapPin
+  MapPin,
+  Menu,
+  X
 } from 'lucide-react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
@@ -49,6 +51,10 @@ const App = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
+
+  // Mobile Nav State
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -577,56 +583,126 @@ const App = () => {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-20 lg:w-64 border-r border-slate-800 bg-slate-900/50 backdrop-blur-md flex flex-col justify-between shrink-0 z-20">
+      {/* Mobile Sidebar Overlay */}
+      {showMobileMenu && (
+        <div className="fixed inset-0 z-40 lg:hidden text-white">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-64 border-r border-slate-800 bg-slate-900 p-4 flex flex-col justify-between animate-slide-right">
+            <div>
+              <div className="flex items-center justify-between mb-8 px-2">
+                <div className="flex items-center gap-2">
+                  <Film className="text-indigo-500" size={24} />
+                  <span className="font-bold text-lg tracking-tight text-white">Stryp</span>
+                </div>
+                <button onClick={() => setShowMobileMenu(false)} className="p-1 text-slate-400 hover:text-white bg-slate-800 rounded-full">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <nav className="space-y-2">
+                <button
+                  onClick={() => { setView(ViewState.DASHBOARD); setShowMobileMenu(false); }}
+                  className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.DASHBOARD ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <LayoutDashboard size={20} />
+                  <span className="font-medium">Dashboard</span>
+                </button>
+                <button
+                  onClick={() => { setView(ViewState.CHARACTERS); setShowMobileMenu(false); }}
+                  className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.CHARACTERS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <Users size={20} />
+                  <span className="font-medium">Characters</span>
+                </button>
+                <button
+                  onClick={() => { setView(ViewState.LOCATIONS); setShowMobileMenu(false); }}
+                  className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.LOCATIONS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                  <MapPin size={20} />
+                  <span className="font-medium">Locations</span>
+                </button>
+              </nav>
+            </div>
+
+            <div className="pt-4 border-t border-slate-800">
+              <div className="mb-4 px-2">
+                <p className="text-xs text-slate-600 font-mono mb-1">USER</p>
+                <p className="text-xs text-slate-400 truncate">{user.email}</p>
+              </div>
+              <button
+                onClick={() => { setView(ViewState.SETTINGS); setShowMobileMenu(false); }}
+                className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.SETTINGS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}
+              >
+                <Settings size={20} />
+                <span className="font-medium">Settings</span>
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Sidebar (Hidden on Mobile) */}
+      <aside className="hidden lg:flex w-64 border-r border-slate-800 bg-slate-900/50 backdrop-blur-md flex-col justify-between shrink-0 z-20">
         <div>
-          <div className="h-16 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
+          <div className="h-16 flex items-center justify-start px-6 border-b border-slate-800">
             <Film className="text-indigo-500" size={24} />
-            <span className="hidden lg:block ml-3 font-bold text-lg tracking-tight text-white">Stryp</span>
+            <span className="ml-3 font-bold text-lg tracking-tight text-white">Stryp</span>
           </div>
 
           <nav className="p-4 space-y-2">
             <button
               onClick={() => setView(ViewState.DASHBOARD)}
-              className={`w-full flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.DASHBOARD ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.DASHBOARD ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <LayoutDashboard size={20} />
-              <span className="hidden lg:block font-medium">Dashboard</span>
+              <span className="font-medium">Dashboard</span>
             </button>
             <button
               onClick={() => setView(ViewState.CHARACTERS)}
-              className={`w-full flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.CHARACTERS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.CHARACTERS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <Users size={20} />
-              <span className="hidden lg:block font-medium">Characters</span>
+              <span className="font-medium">Characters</span>
             </button>
             <button
               onClick={() => setView(ViewState.LOCATIONS)}
-              className={`w-full flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.LOCATIONS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.LOCATIONS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <MapPin size={20} />
-              <span className="hidden lg:block font-medium">Locations</span>
+              <span className="font-medium">Locations</span>
             </button>
           </nav>
         </div>
 
         <div className="p-4 border-t border-slate-800">
-          <div className="mb-4 px-2 hidden lg:block">
+          <div className="mb-4 px-2">
             <p className="text-xs text-slate-600 font-mono mb-1">USER</p>
             <p className="text-xs text-slate-400 truncate">{user.email}</p>
           </div>
           <button
             onClick={() => setView(ViewState.SETTINGS)}
-            className={`w-full flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.SETTINGS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}
+            className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.SETTINGS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}
           >
             <Settings size={20} />
-            <span className="hidden lg:block font-medium">Settings</span>
+            <span className="font-medium">Settings</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
+      <main className="flex-1 overflow-y-auto relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 flex flex-col">
+        {/* Mobile Header */}
+        <div className="lg:hidden h-16 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-900/50 backdrop-blur shrink-0 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowMobileMenu(true)} className="p-2 -ml-2 text-slate-400 hover:text-white">
+              <Menu size={24} />
+            </button>
+            <span className="font-bold text-white">Stryp</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Additional mobile header actions can go here */}
+          </div>
+        </div>
         {renderContent()}
       </main>
 
