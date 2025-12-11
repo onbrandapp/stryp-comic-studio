@@ -444,29 +444,30 @@ const App = () => {
                   </select>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
-                  <h2 className="text-lg md:text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                    <Play className="text-indigo-400" size={20} /> Playback Settings
-                  </h2>
-                  <div className="w-full md:max-w-md">
-                    <label className="block text-sm font-medium text-slate-400 mb-2">
-                      Panel Duration: {(settings.panelDelay || 2000) / 1000} seconds
-                    </label>
-                    <p className="text-xs text-slate-500 mb-3">How long each panel stays on screen during playback and export.</p>
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        min="1000"
-                        max="10000"
-                        step="500"
-                        value={settings.panelDelay || 2000}
-                        onChange={(e) => updateSettings({ ...settings, panelDelay: parseInt(e.target.value) })}
-                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                      <span className="text-sm font-mono text-indigo-400 w-12 text-right">
-                        {(settings.panelDelay || 2000) / 1000}s
-                      </span>
-                    </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
+                <h2 className="text-lg md:text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                  <Play className="text-indigo-400" size={20} /> Playback Settings
+                </h2>
+                <div className="w-full md:max-w-md">
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Panel Duration: {(settings.panelDelay || 2000) / 1000} seconds
+                  </label>
+                  <p className="text-xs text-slate-500 mb-3">How long each panel stays on screen during playback and export.</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1000"
+                      max="10000"
+                      step="500"
+                      value={settings.panelDelay || 2000}
+                      onChange={(e) => updateSettings({ ...settings, panelDelay: parseInt(e.target.value) })}
+                      className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    />
+                    <span className="text-sm font-mono text-indigo-400 w-12 text-right shrink-0">
+                      {(settings.panelDelay || 2000) / 1000}s
+                    </span>
                   </div>
                 </div>
               </div>
