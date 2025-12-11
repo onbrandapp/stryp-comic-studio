@@ -11,6 +11,12 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ settings, user, onUpdateSettings, onLogout }) => {
+    // Defensive check: If settings are not yet loaded, show nothing or a loader.
+    // In App.tsx, initial state is set, but this prevents crashes if something goes wrong.
+    if (!settings) {
+        return null;
+    }
+
     return (
         <div className="p-4 md:p-8 w-full max-w-3xl mx-auto animate-fade-in pb-24 md:pb-8">
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-4">Settings</h1>

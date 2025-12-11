@@ -4,7 +4,7 @@ import {
   LayoutDashboard,
   Users,
   Plus,
-  Settings,
+  Settings as SettingsIcon,
   Film,
   Image as ImageIcon,
   Trash2,
@@ -164,7 +164,8 @@ const App = () => {
     const unsubCharacters = subscribeToCharacters(user.uid, setCharacters);
     const unsubSettings = getSettingsFromFirestore(user.uid, (fetchedSettings) => {
       if (fetchedSettings) {
-        setSettings(fetchedSettings);
+        // Merge with initial settings to ensure all required fields exist (e.g. if new fields were added to types)
+        setSettings({ ...INITIAL_SETTINGS, ...fetchedSettings });
       } else {
         // If no settings are found in Firestore, use the initial default settings.
         setSettings(INITIAL_SETTINGS);
@@ -572,7 +573,7 @@ const App = () => {
                 onClick={() => { setView(ViewState.SETTINGS); setShowMobileMenu(false); }}
                 className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.SETTINGS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}
               >
-                <Settings size={20} />
+                <SettingsIcon size={20} />
                 <span className="font-medium">Settings</span>
               </button>
             </div>
@@ -622,7 +623,7 @@ const App = () => {
             onClick={() => setView(ViewState.SETTINGS)}
             className={`w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors ${view === ViewState.SETTINGS ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}
           >
-            <Settings size={20} />
+            <SettingsIcon size={20} />
             <span className="font-medium">Settings</span>
           </button>
         </div>
