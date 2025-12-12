@@ -52,7 +52,7 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
 
   const isTopHalf = currentStep.y < 50;
   const isLeftHalf = currentStep.x < 50;
-  
+
   let tooltipWrapperStyle: React.CSSProperties = {};
 
   if (isMobile) {
@@ -75,24 +75,24 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
       maxWidth: '90vw',
       zIndex: 20,
       transition: 'all 500ms ease-in-out',
-      ...(isTopHalf 
-          ? { top: `${currentStep.y + currentStep.height}%`, paddingTop: '12px' } 
-          : { bottom: `${100 - currentStep.y}%`, paddingBottom: '12px' }
+      ...(isTopHalf
+        ? { top: `${currentStep.y + currentStep.height}%`, paddingTop: '12px' }
+        : { bottom: `${100 - currentStep.y}%`, paddingBottom: '12px' }
       ),
       ...(isLeftHalf
-          ? { left: `${currentStep.x}%` } 
-          : { right: `${100 - (currentStep.x + currentStep.width)}%` }
+        ? { left: `${currentStep.x}%` }
+        : { right: `${100 - (currentStep.x + currentStep.width)}%` }
       )
     };
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-[fadeIn_0.2s_ease-out]">
-      <div 
+    <div className="fixed inset-0 z-[100] flex items-center justify-center animate-[fadeIn_0.2s_ease-out]">
+      <div
         className="absolute inset-0 bg-black/95 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       <style>{`
         @keyframes slideUpFade {
           from { opacity: 0; transform: scale(0.95) translateY(4px); }
@@ -106,25 +106,25 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
           animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
-        
+
       <div className={`relative z-10 w-full h-full flex items-center justify-center pointer-events-none ${isMobile ? 'p-0 pb-32' : 'p-4 md:p-8'}`}>
         <div className="relative pointer-events-auto inline-block">
-          <img 
-            src={imageSrc} 
-            alt="Walkthrough Target" 
+          <img
+            src={imageSrc}
+            alt="Walkthrough Target"
             className={`block w-auto h-auto object-contain rounded-lg select-none bg-black shadow-2xl
               ${isMobile ? 'max-w-full max-h-[65vh]' : 'max-w-[90vw] max-h-[85vh]'}
             `}
           />
 
-          <div 
+          <div
             className="absolute rounded-md transition-all duration-500 ease-in-out pointer-events-none z-10"
             style={{
               left: `${currentStep.x}%`,
               top: `${currentStep.y}%`,
               width: `${currentStep.width}%`,
               height: `${currentStep.height}%`,
-              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.75)', 
+              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.75)',
               border: '2px solid rgba(255, 255, 255, 0.9)',
               filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.4))'
             }}
@@ -132,31 +132,31 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
 
           {!isMobile && (
             <div style={tooltipWrapperStyle} className="flex flex-col">
-                <div 
-                  key={currentStep.id} 
-                  className={`animate-tooltip bg-white text-slate-900 rounded-lg shadow-2xl p-5 border border-slate-100 flex flex-col pointer-events-auto
+              <div
+                key={currentStep.id}
+                className={`animate-tooltip bg-white text-slate-900 rounded-lg shadow-2xl p-5 border border-slate-100 flex flex-col pointer-events-auto
                     ${!isLeftHalf ? 'items-end text-right' : 'items-start text-left'}
                   `}
-                >
-                    <StepContent 
-                        step={currentStep} 
-                        index={currentIndex} 
-                        total={steps.length} 
-                        onClose={onClose} 
-                        onNext={handleNext} 
-                        onPrev={handlePrev} 
-                    />
-                </div>
+              >
+                <StepContent
+                  step={currentStep}
+                  index={currentIndex}
+                  total={steps.length}
+                  onClose={onClose}
+                  onNext={handleNext}
+                  onPrev={handlePrev}
+                />
+              </div>
 
-                <div 
-                  className={`w-0 h-0 border-[8px] border-transparent transition-all duration-500 pointer-events-none
-                    ${isTopHalf 
-                       ? 'border-b-white -mt-[1px] order-first' 
-                       : 'border-t-white -mb-[1px] order-last' 
-                    }
+              <div
+                className={`w-0 h-0 border-[8px] border-transparent transition-all duration-500 pointer-events-none
+                    ${isTopHalf
+                    ? 'border-b-white -mt-[1px] order-first'
+                    : 'border-t-white -mb-[1px] order-last'
+                  }
                     ${isLeftHalf ? 'self-start ml-4' : 'self-end mr-4'}
                    `}
-                 />
+              />
             </div>
           )}
         </div>
@@ -164,19 +164,19 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
 
       {isMobile && (
         <div style={tooltipWrapperStyle}>
-            <div 
-                key={currentStep.id}
-                className="animate-tooltip bg-white text-slate-900 rounded-xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] p-5 border border-slate-100 w-full max-w-lg mx-auto pointer-events-auto"
-            >
-                <StepContent 
-                    step={currentStep} 
-                    index={currentIndex} 
-                    total={steps.length} 
-                    onClose={onClose} 
-                    onNext={handleNext} 
-                    onPrev={handlePrev} 
-                />
-            </div>
+          <div
+            key={currentStep.id}
+            className="animate-tooltip bg-white text-slate-900 rounded-xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] p-5 border border-slate-100 w-full max-w-lg mx-auto pointer-events-auto"
+          >
+            <StepContent
+              step={currentStep}
+              index={currentIndex}
+              total={steps.length}
+              onClose={onClose}
+              onNext={handleNext}
+              onPrev={handlePrev}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -184,61 +184,61 @@ export const WalkthroughPlayer: React.FC<WalkthroughPlayerProps> = ({ steps, onC
 };
 
 const StepContent: React.FC<{
-    step: Step; 
-    index: number; 
-    total: number;
-    onClose: () => void;
-    onNext: () => void;
-    onPrev: () => void;
+  step: Step;
+  index: number;
+  total: number;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
 }> = ({ step, index, total, onClose, onNext, onPrev }) => (
-    <div className="w-full">
-        <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
-            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                Step {index + 1} / {total}
-            </span>
-            <button 
-                onClick={onClose} 
-                className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-full transition" 
-                title="Close Tour"
-            >
-                <X size={16} />
-            </button>
-        </div>
-
-        <h3 className="text-lg font-bold mb-1 leading-tight text-slate-800">{step.title}</h3>
-        <p className="text-slate-600 text-sm mb-5 leading-relaxed">
-            {step.description}
-        </p>
-
-        <div className="flex justify-between items-center pt-1">
-            <button 
-                onClick={onClose}
-                className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition px-2 py-2"
-            >
-                Skip
-            </button>
-
-            <div className="flex items-center gap-3">
-                <button 
-                    onClick={onPrev}
-                    disabled={index === 0}
-                    className={`p-2 rounded-full transition border border-slate-200
-                        ${index === 0 
-                            ? 'text-slate-300 bg-slate-50 cursor-not-allowed' 
-                            : 'text-slate-600 hover:bg-slate-100 hover:border-slate-300 bg-white'}`}
-                    aria-label="Previous Step"
-                >
-                    <ChevronLeft size={20} />
-                </button>
-
-                <button 
-                    onClick={onNext}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center transition shadow-md shadow-indigo-200 active:scale-95"
-                >
-                    {index === total - 1 ? 'Finish' : 'Next'}
-                    {index < total - 1 && <ChevronRight size={18} className="ml-1" />}
-                </button>
-            </div>
-        </div>
+  <div className="w-full">
+    <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+        Step {index + 1} / {total}
+      </span>
+      <button
+        onClick={onClose}
+        className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-full transition"
+        title="Close Tour"
+      >
+        <X size={16} />
+      </button>
     </div>
+
+    <h3 className="text-lg font-bold mb-1 leading-tight text-slate-800">{step.title}</h3>
+    <p className="text-slate-600 text-sm mb-5 leading-relaxed">
+      {step.description}
+    </p>
+
+    <div className="flex justify-between items-center pt-1">
+      <button
+        onClick={onClose}
+        className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition px-2 py-2"
+      >
+        Skip
+      </button>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onPrev}
+          disabled={index === 0}
+          className={`p-2 rounded-full transition border border-slate-200
+                        ${index === 0
+              ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
+              : 'text-slate-600 hover:bg-slate-100 hover:border-slate-300 bg-white'}`}
+          aria-label="Previous Step"
+        >
+          <ChevronLeft size={20} />
+        </button>
+
+        <button
+          onClick={onNext}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center transition shadow-md shadow-indigo-200 active:scale-95"
+        >
+          {index === total - 1 ? 'Finish' : 'Next'}
+          {index < total - 1 && <ChevronRight size={18} className="ml-1" />}
+        </button>
+      </div>
+    </div>
+  </div>
 );

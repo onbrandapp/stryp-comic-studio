@@ -436,6 +436,7 @@ const App = () => {
             characters={characters}
             user={user}
             onModalStateChange={setIsCharacterModalOpen}
+            onStartTour={() => setShowWalkthrough(true)}
           />
         );
       case ViewState.LOCATIONS:

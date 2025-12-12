@@ -9,9 +9,10 @@ interface Props {
   characters: Character[];
   user: FirebaseUser | null;
   onModalStateChange?: (isOpen: boolean) => void;
+  onStartTour?: () => void;
 }
 
-const CharacterVault: React.FC<Props> = ({ characters, user, onModalStateChange }) => {
+const CharacterVault: React.FC<Props> = ({ characters, user, onModalStateChange, onStartTour }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Sync internal modal state to parent
@@ -20,6 +21,8 @@ const CharacterVault: React.FC<Props> = ({ characters, user, onModalStateChange 
   }, [isModalOpen, onModalStateChange]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // ... (rest of state logs omitted for brevity) ...
 
   const [newCharName, setNewCharName] = useState('');
   const [newCharBio, setNewCharBio] = useState('');
@@ -291,9 +294,17 @@ const CharacterVault: React.FC<Props> = ({ characters, user, onModalStateChange 
                   <h2 className="text-2xl font-bold text-white">{editingId ? 'Edit Character' : 'New Character'}</h2>
                   <p className="text-slate-400 text-sm mt-1">Configure the visual and audio identity.</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-500 hover:text-white transition-colors">
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onStartTour}
+                    className="hidden md:flex bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-all items-center gap-2 border border-indigo-500/30"
+                  >
+                    Start Tour
+                  </button>
+                  <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-500 hover:text-white transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4 md:space-y-5 flex-1">
