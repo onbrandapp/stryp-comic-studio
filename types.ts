@@ -65,6 +65,16 @@ export interface Location {
   mediaType?: 'image' | 'video';
   createdAt: number;
 }
+export interface Step {
+  id: string;
+  title: string;
+  description: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  order: number;
+}
 
 export const AVAILABLE_VOICES = [
   { id: 'Puck', name: 'Puck (Male, Soft)' },

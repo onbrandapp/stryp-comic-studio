@@ -21,7 +21,8 @@ import {
   X,
   HelpCircle
 } from 'lucide-react';
-import GuidedTour, { runTour } from './components/GuidedTour';
+import { WalkthroughPlayer } from './components/WalkthroughPlayer';
+import walkthroughData from './walkthrough.json';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 import { Project, Character, ViewState, ComicMode, AVAILABLE_VOICES, Panel, AppSettings } from './types';
@@ -58,6 +59,7 @@ const App = () => {
 
   // Mobile Nav State
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -525,7 +527,13 @@ const App = () => {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
-      <GuidedTour />
+      {showWalkthrough && (
+        <WalkthroughPlayer
+          steps={walkthroughData.steps}
+          imageSrc={walkthroughData.image}
+          onClose={() => setShowWalkthrough(false)}
+        />
+      )}
       {/* Mobile Sidebar Overlay */}
       {showMobileMenu && (
         <div className="fixed inset-0 z-40 lg:hidden text-white">
@@ -580,7 +588,7 @@ const App = () => {
                 <span className="font-medium">Settings</span>
               </button>
               <button
-                onClick={() => { runTour(view); setShowMobileMenu(false); }}
+                onClick={() => { setShowWalkthrough(true); setShowMobileMenu(false); }}
                 className="w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors text-slate-500 hover:bg-slate-800 hover:text-white"
               >
                 <HelpCircle size={20} />
@@ -637,7 +645,7 @@ const App = () => {
             <span className="font-medium">Settings</span>
           </button>
           <button
-            onClick={() => runTour(view)}
+            onClick={() => setShowWalkthrough(true)}
             className="w-full flex items-center justify-start gap-3 p-3 rounded-xl transition-colors text-slate-500 hover:bg-slate-800 hover:text-white"
           >
             <HelpCircle size={20} />
