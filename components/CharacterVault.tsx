@@ -8,10 +8,16 @@ import { User as FirebaseUser } from 'firebase/auth';
 interface Props {
   characters: Character[];
   user: FirebaseUser | null;
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
-const CharacterVault: React.FC<Props> = ({ characters, user }) => {
+const CharacterVault: React.FC<Props> = ({ characters, user, onModalStateChange }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Sync internal modal state to parent
+  React.useEffect(() => {
+    onModalStateChange?.(isModalOpen);
+  }, [isModalOpen, onModalStateChange]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -376,8 +382,8 @@ const CharacterVault: React.FC<Props> = ({ characters, user }) => {
                     setIsVoiceSelectorOpen(false);
                   }}
                   className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all group ${newCharVoice === voice.id
-                      ? 'bg-indigo-600/10 border-indigo-500 text-white'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-900'
+                    ? 'bg-indigo-600/10 border-indigo-500 text-white'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-900'
                     }`}
                 >
                   <div className="flex items-center gap-3">
