@@ -1099,32 +1099,10 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           </div>
         )}
 
-        <div className={`flex-1 overflow-y-auto p-4 md:p-8 relative ${isPreviewPlaying ? 'bg-black' : 'bg-slate-950'}`}>
-
-          {isPreviewPlaying ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="aspect-video w-full max-w-5xl relative animate-fade-in">
-                {panels[activePreviewIndex]?.imageUrl ? (
-                  <img src={panels[activePreviewIndex].imageUrl} className="w-full h-full object-contain" alt="Panel" />
-                ) : (
-                  <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">
-                    No Image Generated
-                  </div>
-                )}
-
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent p-8 pt-20">
-                  {panels[activePreviewIndex]?.characterId && (
-                    <span className="text-cyan-400 font-bold text-lg mb-2 block">
-                      {characters.find(c => c.id === panels[activePreviewIndex].characterId)?.name}
-                    </span>
-                  )}
-                  <p className="text-white text-2xl font-medium leading-relaxed font-sans shadow-black drop-shadow-md">
-                    "{panels[activePreviewIndex]?.dialogue}"
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative bg-slate-950">
+          {/* Editor View */}
+          {!isPreviewPlaying && (
             <div className="max-w-4xl mx-auto space-y-8 pb-20">
               {panels.length === 0 && (
                 <div className="text-center py-20 opacity-50">
@@ -1148,6 +1126,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                     <span className="font-mono text-xs text-slate-500 font-bold">PANEL {index + 1}</span>
                     <div className="flex gap-2">
                       <button onClick={() => deletePanel(panel.id)} className="p-1.5 hover:bg-rose-500/20 hover:text-rose-400 text-slate-600 rounded">
+
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -1495,7 +1474,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
                   <div className="flex justify-end gap-3">
                     <button
-                      onClick={() => setIsEditProjectModalOpen(false)}
+                      onClick={() => setShowEditProjectModal(false)}
                       className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
                     >
                       Cancel
@@ -1516,10 +1495,55 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         </div>,
         document.body
       )}
+
+      {isPreviewPlaying && createPortal(
+        <div className="fixed inset-0 z-[100] bg-[#020617] flex flex-col h-screen overflow-hidden text-white font-sans animate-in fade-in duration-300">
+          {/* Start Screen / Header */}
+          {/* NOTE: HTML version hides header during play. We'll show a minimal one or just text? 
+               The download format is: Stage (center) -> Captions (bottom overlay) -> Controls (footer).
+           */}
+
+          <div className="flex-1 flex items-center justify-center relative bg-black">
+            {panels[activePreviewIndex]?.imageUrl ? (
+              <img
+                src={panels[activePreviewIndex].imageUrl}
+                className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"
+                alt="Panel"
+              />
+            ) : (
+              <div className="text-slate-600 flex flex-col items-center">
+                <ImageIcon size={48} className="mb-2 opacity-50" />
+                <span>Generating Visuals...</span>
+              </div>
+            )}
+
+            {/* Caption Overlay - Matching the HTML download style */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pb-2 text-center flex flex-col items-center justify-end min-h-[120px]">
+              {panels[activePreviewIndex]?.characterId && (
+                <span className="text-cyan-400 font-bold text-sm mb-1 uppercase tracking-wider block">
+                  {characters.find(c => c.id === panels[activePreviewIndex].characterId)?.name}
+                </span>
+              )}
+              <p className="text-white text-xl md:text-2xl font-medium leading-relaxed drop-shadow-md pb-4">
+                {panels[activePreviewIndex]?.dialogue}
+              </p>
+            </div>
+          </div>
+
+          {/* Controls - Matching the HTML download style */}
+          <div className="p-4 bg-slate-900 border-t border-slate-800 flex justify-center gap-4 shrink-0 safe-area-bottom">
+            <button
+              onClick={stopPreview}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-lg flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
+            >
+              <StopCircle size={20} /> Stop Movie
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
-
-
 
 export default Studio;

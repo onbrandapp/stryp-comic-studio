@@ -336,17 +336,6 @@ const App = () => {
 
   const activeTourData = getTourData();
 
-  // DEBUGGING TOUR SELECTION
-  useEffect(() => {
-    console.log('--- TOUR DEBUG ---');
-    console.log('Current View:', view);
-    console.log('Character Modal Open:', isCharacterModalOpen);
-    console.log('Active Tour Data:', activeTourData ? 'Found' : 'Null');
-    if (activeTourData) {
-      console.log('Tour Title:', (activeTourData as any).title); // assuming title exists
-    }
-  }, [view, isCharacterModalOpen, activeTourData]);
-
   // --- RENDER HELPERS ---
 
   if (checkingApiKey || loadingAuth) {
