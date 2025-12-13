@@ -229,7 +229,7 @@ class GeminiService {
         contents: { parts }
       });
 
-      return response.text || character.bio || '';
+      return (response.text || '') + (character.bio ? ` Context: ${character.bio}` : '');
     } catch (error) {
       console.warn("Failed to get visual description:", error);
       return character.bio || '';
@@ -265,8 +265,9 @@ class GeminiService {
         prompt = `
 (Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
 
-(Subject & Action): Character Name: "${character.name}". 
-Character Appearance: ${visualDescription}.
+(Subject & Action): 
+Visual Appearance (PRIORITY): ${visualDescription}.
+Character Name: "${character.name}" (Note: Rely on Visual Appearance for species/loops, ignore name bias).
 Action: ${panelDescription}
 
 (Setting): ${locationContext ? locationContext : 'Background matches the mood/action.'}
