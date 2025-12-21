@@ -267,12 +267,12 @@ export const uploadStoryboardImageFromFile = async (userId: string, file: File):
 
 // Uploads generated audio base64 to Firebase Storage
 export const uploadStoryboardAudio = async (userId: string, base64Data: string): Promise<string> => {
-  const storageRef = ref(storage, `users/${userId}/storyboard_audio/${Date.now()}.wav`);
+  const storageRef = ref(storage, `users/${userId}/storyboard_audio/${Date.now()}.mp3`);
 
   // Convert Base64 Data URI to Blob for more reliable upload
   const blob = base64ToBlob(base64Data);
 
-  const snapshot = await uploadBytes(storageRef, blob);
+  const snapshot = await uploadBytes(storageRef, blob, { contentType: 'audio/mpeg' });
   return await getDownloadURL(snapshot.ref);
 };
 
