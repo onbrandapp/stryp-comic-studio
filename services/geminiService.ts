@@ -81,8 +81,15 @@ async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data
 
 class GeminiService {
   private getClient() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-    return new GoogleGenAI(apiKey);
+    // Look for the key in multiple possible locations (Vite prefix and standard)
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
+      import.meta.env.GEMINI_API_KEY ||
+      (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : '') ||
+      (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') ||
+      '';
+
+    // Using the object format since it was used in the previous working version
+    return new GoogleGenAI({ apiKey });
   }
 
   // Generate a script (list of panels)
@@ -382,7 +389,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
       const result = await withTimeout<any>(
         // @ts-ignore
         this.getClient().models.generateContent({
-          model: 'veo-3.1', // Using the latest Veo model for video
+          model: 'veo-3.1-generate-001', // Using the stable Veo 3.1 model
           contents: [{
             role: 'user',
             parts: [{ text: prompt }]
