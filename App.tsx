@@ -295,7 +295,7 @@ const App = () => {
   // Handle Full Project Updates (e.g. Adding/Removing Storyboards)
   const handleProjectUpdate = (projectId: string, updatedStoryboards: Storyboard[]) => {
     setProjects(prev => prev.map(p =>
-      p.id === projectId ? { ...p, storyboards: updatedStoryboards } : p
+      p.id === projectId ? { ...p, storyboards: updatedStoryboards || [] } : p
     ));
     triggerDebouncedSave(projectId);
   };
@@ -316,7 +316,7 @@ const App = () => {
         if (p.id !== projectId) return p;
         return {
           ...p,
-          storyboards: p.storyboards.map(storyboard => storyboard.id === storyboardId ? { ...storyboard, ...updates } : storyboard)
+          storyboards: (p.storyboards || (p as any).panels || []).map(storyboard => storyboard.id === storyboardId ? { ...storyboard, ...updates } : storyboard)
         };
       });
     });

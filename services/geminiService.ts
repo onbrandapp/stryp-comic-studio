@@ -112,9 +112,9 @@ class GeminiService {
       Characters available:
       ${characterContext}
 
-      Output a JSON array of panels. Each panel must have:
+      Output a JSON array of storyboards. Each storyboard must have:
       - "description": A detailed visual description for an image generator. Include specific camera angles (e.g., 'Wide shot', 'Close up') and lighting details.
-      - "dialogue": The text spoken in the panel (or caption).
+      - "dialogue": The text spoken in the storyboard (or caption).
       - "characterName": The name of the character speaking (if any).
     `;
 

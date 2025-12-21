@@ -48,7 +48,7 @@ interface Props {
 }
 
 const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdateStoryboards, onStoryboardChange, onBack, onSave, onUpdateProjectDetails, onUpdateProject }) => {
-  const [storyboards, setStoryboards] = useState<Storyboard[]>(project.storyboards);
+  const [storyboards, setStoryboards] = useState<Storyboard[]>(project.storyboards || (project as any).panels || []);
   const [storyboardStates, setStoryboardStates] = useState<Record<string, string>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(() => {
@@ -136,9 +136,10 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
   // SANITIZATION ON LOAD:
   useEffect(() => {
-    const cleanStoryboards = project.storyboards.map(p => ({
+    const cleanStoryboards = (project.storyboards || (project as any).panels || []).map(p => ({
       ...p,
       isGeneratingImage: false,
+      isGeneratingVideo: false,
       isGeneratingAudio: false
     }));
     setStoryboards(cleanStoryboards);
@@ -150,7 +151,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     if (isBatchGenerating || isBatchAudioGenerating) return;
 
     setStoryboards(currentLocalStoryboards => {
-      return project.storyboards.map(serverStoryboard => {
+      const serverStoryboards = project.storyboards || (project as any).panels || [];
+      return serverStoryboards.map(serverStoryboard => {
         const localStoryboard = currentLocalStoryboards.find(p => p.id === serverStoryboard.id);
 
         // SMART MERGE:

@@ -48,7 +48,14 @@ export const logout = async () => {
 export const subscribeToProjects = (userId: string, callback: (projects: Project[]) => void) => {
   const q = query(collection(db, `users/${userId}/projects`), orderBy("createdAt", "desc"));
   return onSnapshot(q, (snapshot) => {
-    const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+    const projects = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        storyboards: data.storyboards || data.panels || []
+      } as Project;
+    });
     callback(projects);
   });
 };
