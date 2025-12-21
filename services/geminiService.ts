@@ -81,7 +81,8 @@ async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data
 
 class GeminiService {
   private getClient() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    return new GoogleGenAI(apiKey);
   }
 
   // Generate a script (list of panels)
