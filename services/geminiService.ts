@@ -430,7 +430,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
       // Wrapped in timeout to prevent hanging if the API is slow
       const response = await withTimeout<GenerateContentResponse>(
         this.getClient().models.generateContent({
-          model: 'gemini-2.5-flash-tts',
+          model: 'gemini-2.5-flash-preview-tts',
           contents: [{ role: 'user', parts: [{ text }] }],
           config: {
             responseModalities: [Modality.AUDIO],
