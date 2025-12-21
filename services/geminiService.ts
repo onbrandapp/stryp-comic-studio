@@ -438,6 +438,10 @@ IMPORTANT: The background MUST match the Setting description accurately.
               voiceConfig: {
                 prebuiltVoiceConfig: { voiceName }
               }
+            },
+            // @ts-ignore - audioConfig is supported by the API but might be missing from older type definitions
+            audioConfig: {
+              audioEncoding: 'MP3'
             }
           }
         }),
@@ -448,7 +452,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (!base64Audio) throw new Error("No audio generated");
 
-      return `data:audio/wav;base64,${base64Audio}`;
+      return `data:audio/mpeg;base64,${base64Audio}`;
 
     } catch (error: any) {
       console.error("Speech generation failed:", error);
