@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { Project, Character, Panel, AVAILABLE_VOICES, AppSettings, Location } from '../types';
 import { gemini } from '../services/geminiService';
-import { uploadPanelImageFromString, uploadPanelImageFromFile, uploadPanelAudio, updateProjectMetadata, subscribeToLocations } from '../services/firebase';
+import { uploadPanelImageFromString, uploadPanelImageFromFile, uploadPanelVideoFromString, uploadPanelAudio, updateProjectMetadata, subscribeToLocations } from '../services/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 
 interface Props {
@@ -308,6 +308,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         dialogue: p.dialogue || '',
         characterId: p.characterId,
         isGeneratingImage: false,
+        isGeneratingVideo: false,
         isGeneratingAudio: false,
       }));
 
@@ -413,33 +414,111 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
   };
 
+  const handleGenerateVideo = async (panelId: string) => {
+    if (!user) {
+      alert("Cannot generate video without a logged-in user.");
+      return;
+    }
+
+    const panel = panels.find(p => p.id === panelId);
+    if (!panel) return;
+
+    if (panel.isGeneratingAudio || isBatchAudioGenerating) {
+      alert("Please wait for audio generation to finish.");
+      return;
+    }
+
+    setUploadErrors(prev => {
+      const newState = { ...prev };
+      delete newState[panelId];
+      return newState;
+    });
+
+    setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingVideo: true } : p));
+    setPanelStates(prev => ({ ...prev, [panelId]: 'Preparing...' }));
+
+    try {
+      const character = characters.find(c => c.id === panel.characterId);
+      const activeLocation = locations.find(l => l.id === activeLocationId);
+
+      setPanelStates(prev => ({ ...prev, [panelId]: 'Director at work...' }));
+      await new Promise(r => setTimeout(r, 100));
+
+      setPanelStates(prev => ({ ...prev, [panelId]: 'Generating Video...' }));
+
+      const base64VideoDataUrl = await gemini.generatePanelVideo(
+        panel.description,
+        character,
+        activeLocation
+      );
+
+      setPanels(prev => {
+        const updated = prev.map(p =>
+          p.id === panelId ? { ...p, videoUrl: base64VideoDataUrl, isGeneratingVideo: false } : p
+        );
+        return updated;
+      });
+
+      setPanelStates(prev => ({ ...prev, [panelId]: 'Uploading Film...' }));
+      setUploadingPanelId(panelId);
+
+      try {
+        const finalVideoUrl = await uploadPanelVideoFromString(user.uid, base64VideoDataUrl);
+
+        onPanelChange(panelId, { videoUrl: finalVideoUrl });
+
+        setPanels(prev => prev.map(p =>
+          p.id === panelId ? { ...p, videoUrl: finalVideoUrl } : p
+        ));
+
+      } catch (uploadError) {
+        console.error("Background video upload failed:", uploadError);
+        setUploadErrors(prev => ({ ...prev, [panelId]: "Save failed. Video is local only." }));
+      }
+
+    } catch (error) {
+      console.error("Video generation failed:", error);
+      setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingVideo: false } : p));
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Video generation failed: ${errorMessage}`);
+    } finally {
+      setPanelStates(prev => {
+        const newState = { ...prev };
+        delete newState[panelId];
+        return newState;
+      });
+      setUploadingPanelId(null);
+    }
+  };
+
   const handleGenerateAllVisuals = async () => {
     if (isBatchAudioGenerating) {
       alert("Please wait for audio generation to complete.");
       return;
     }
 
-    const panelsToGenerate = panels.filter(p => !p.imageUrl && !p.isGeneratingImage);
+    const isVideoMode = project.mode === 'video';
+    const panelsToGenerate = panels.filter(p => isVideoMode ? (!p.videoUrl && !p.isGeneratingVideo) : (!p.imageUrl && !p.isGeneratingImage));
+
     if (panelsToGenerate.length === 0) {
-      alert("All panels already have visuals!");
+      alert(`All panels already have ${isVideoMode ? 'videos' : 'visuals'}!`);
       return;
     }
 
-    if (!confirm(`Generate visuals for ${panelsToGenerate.length} panels? This may take a moment.`)) return;
+    if (!confirm(`Generate ${isVideoMode ? 'videos' : 'visuals'} for ${panelsToGenerate.length} panels? This may take a moment.`)) return;
 
     setIsBatchGenerating(true);
 
     try {
       for (const panel of panelsToGenerate) {
-        handleGenerateImage(panel.id);
+        if (isVideoMode) {
+          await handleGenerateVideo(panel.id);
+        } else {
+          handleGenerateImage(panel.id);
+        }
         // Stagger requests
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-
-      // Pulse loop
-      for (let i = 0; i < 3; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setPanelStates(prev => ({ ...prev }));
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     } finally {
       setIsBatchGenerating(false);
@@ -599,8 +678,9 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     <style>
         body { margin: 0; background: #020617; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         #stage { flex: 1; display: flex; items-center; justify-content: center; position: relative; background: #000; }
-        img { max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.5s; }
-        img.visible { opacity: 1; }
+        #stage { flex: 1; display: flex; items-center; justify-content: center; position: relative; background: #000; overflow: hidden; }
+        .media { max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.5s; display: none; }
+        .media.visible { opacity: 1; display: block; }
         #captions { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); padding: 40px 20px 20px; text-align: center; font-size: 20px; min-height: 100px; display: flex; align-items: flex-end; justify-content: center; }
         #controls { padding: 15px; background: #0f172a; display: flex; justify-content: center; gap: 15px; }
         button { padding: 10px 24px; font-size: 16px; cursor: pointer; background: #4f46e5; color: white; border: none; border-radius: 8px; font-weight: bold; transition: background 0.2s; }
@@ -616,7 +696,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         <button onclick="startPlayback()">Start Comic</button>
     </div>
     <div id="stage">
-        <img id="current-img" />
+        <img id="current-img" class="media" />
+        <video id="current-vid" class="media" muted playsinline></video>
         <div id="captions"></div>
     </div>
     <div id="controls">
@@ -645,10 +726,23 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
             const panel = panels[index];
             const img = document.getElementById('current-img');
+            const vid = document.getElementById('current-vid');
+            
             img.classList.remove('visible');
+            vid.classList.remove('visible');
+            vid.pause();
+
             setTimeout(() => {
-                img.src = panel.imageUrl || '';
-                img.onload = () => img.classList.add('visible');
+                if (panel.videoUrl) {
+                    vid.src = panel.videoUrl;
+                    vid.oncanplay = () => {
+                        vid.classList.add('visible');
+                        if (isPlaying) vid.play();
+                    };
+                } else {
+                    img.src = panel.imageUrl || '';
+                    img.onload = () => img.classList.add('visible');
+                }
             }, 50);
             
             const captionEl = document.getElementById('captions');
@@ -794,8 +888,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-sm shrink-0">
         <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
           <div className="flex items-center gap-2 mb-3">
-            <Wand2 className="text-indigo-400" size={16} />
-            <h3 className="text-sm font-bold text-white">AI Script Gen</h3>
+            {project.mode === 'video' ? <Film className="text-cyan-400" size={16} /> : <Wand2 className="text-indigo-400" size={16} />}
+            <h3 className="text-sm font-bold text-white">AI {project.mode === 'video' ? 'Video' : 'Script'} Gen</h3>
           </div>
 
           <div className="space-y-3">
@@ -1134,15 +1228,67 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
                   <div className="flex flex-col md:flex-row">
                     <div className="w-full md:w-1/2 aspect-video bg-black relative flex items-center justify-center border-r border-slate-800 group-hover:border-slate-700">
-                      {panel.imageUrl ? (
-                        <>
-                          <img src={panel.imageUrl} alt="Panel" className="w-full h-full object-cover" />
-                          {panel.characterId && (
-                            <div className="absolute top-2 left-2 bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm border border-indigo-400/30 z-10 pointer-events-none">
-                              <User size={10} />
-                              <span className="font-semibold">Ref Used</span>
-                            </div>
+                      {panel.videoUrl ? (
+                        <video
+                          src={panel.videoUrl}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                      ) : panel.imageUrl ? (
+                        <img src={panel.imageUrl} alt="Panel" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center p-6 w-full">
+                          <ImageIcon className="mx-auto text-slate-700 mb-2" size={32} />
+                          <p className="text-xs text-slate-600 mb-4">No Visual Generated</p>
+
+                          <div className="flex flex-wrap justify-center gap-2">
+                            {project.mode === 'video' ? (
+                              <button
+                                onClick={() => handleGenerateVideo(panel.id)}
+                                disabled={panel.isGeneratingVideo || uploadingPanelId === panel.id}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
+                              >
+                                {panel.isGeneratingVideo ? <Loader2 className="animate-spin" size={14} /> : <Film size={14} />}
+                                {panel.isGeneratingVideo ? 'Directing...' : 'AI Generate Video'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleGenerateImage(panel.id)}
+                                disabled={panel.isGeneratingImage || uploadingPanelId === panel.id}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
+                              >
+                                {panel.isGeneratingImage ? <Loader2 className="animate-spin" size={14} /> : <Wand2 size={14} />}
+                                {panel.isGeneratingImage ? 'Generating...' : 'AI Generate Image'}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => triggerFileUpload(panel.id)}
+                              disabled={panel.isGeneratingImage || panel.isGeneratingVideo || uploadingPanelId === panel.id}
+                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
+                            >
+                              {uploadingPanelId === panel.id ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+                              {uploadingPanelId === panel.id ? 'Uploading...' : 'Upload File'}
+                            </button>
+                          </div>
+
+                          {(panel.isGeneratingImage || panel.isGeneratingVideo) && panelStates[panel.id] && (
+                            <span className="text-[10px] text-indigo-400 font-mono animate-pulse mt-2 block">
+                              {panelStates[panel.id]}
+                            </span>
                           )}
+                        </div>
+                      )}
+
+                      {(panel.imageUrl || panel.videoUrl) && (
+                        <>
+                          <div className="absolute top-2 left-2 bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm border border-indigo-400/30 z-10 pointer-events-none">
+                            <User size={10} />
+                            <span className="font-semibold">Ref Used</span>
+                          </div>
                           {uploadErrors[panel.id] && (
                             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/90 text-white text-[10px] px-2 py-1.5 rounded flex items-center gap-1.5 backdrop-blur-md shadow-lg animate-pulse">
                               <AlertTriangle size={12} />
@@ -1155,61 +1301,28 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                               <span className="font-semibold">Syncing...</span>
                             </div>
                           )}
-                        </>
-                      ) : (
-                        <div className="text-center p-6 w-full">
-                          <ImageIcon className="mx-auto text-slate-700 mb-2" size={32} />
-                          <p className="text-xs text-slate-600 mb-4">No Visual Generated</p>
 
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <button
-                              onClick={() => handleGenerateImage(panel.id)}
-                              disabled={panel.isGeneratingImage || uploadingPanelId === panel.id}
-                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
-                            >
-                              {panel.isGeneratingImage ? <Loader2 className="animate-spin" size={14} /> : <Wand2 size={14} />}
-                              {panel.isGeneratingImage ? 'Generating...' : 'AI Generate'}
-                            </button>
-
+                          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => triggerFileUpload(panel.id)}
-                              disabled={panel.isGeneratingImage || uploadingPanelId === panel.id}
-                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
+                              className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
+                              title="Upload Replacement"
                             >
-                              {uploadingPanelId === panel.id ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-                              {uploadingPanelId === panel.id ? 'Uploading...' : 'Upload File'}
+                              <Upload size={16} />
+                            </button>
+                            <button
+                              onClick={() => project.mode === 'video' ? handleGenerateVideo(panel.id) : handleGenerateImage(panel.id)}
+                              className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
+                              title="Regenerate with AI"
+                            >
+                              <RefreshCw size={16} />
                             </button>
                           </div>
-
-                          {panel.isGeneratingImage && panelStates[panel.id] && (
-                            <span className="text-[10px] text-indigo-400 font-mono animate-pulse mt-2 block">
-                              {panelStates[panel.id]}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {panel.imageUrl && (
-                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => triggerFileUpload(panel.id)}
-                            className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
-                            title="Upload Replacement Image"
-                          >
-                            <Upload size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleGenerateImage(panel.id)}
-                            className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
-                            title="Regenerate with AI"
-                          >
-                            <RefreshCw size={16} />
-                          </button>
-                        </div>
+                        </>
                       )}
 
                       {/* Blocking Overlay ONLY for generation, not upload */}
-                      {panel.isGeneratingImage && (
+                      {(panel.isGeneratingImage || panel.isGeneratingVideo) && (
                         <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-20">
                           <Loader2 className="animate-spin text-white mb-2" size={24} />
                           <span className="text-xs text-white font-medium">
@@ -1302,6 +1415,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                     description: '',
                     dialogue: '',
                     isGeneratingImage: false,
+                    isGeneratingVideo: false,
                     isGeneratingAudio: false,
                   };
                   updateLocalPanels([...panels, newPanel]);
@@ -1504,7 +1618,15 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
            */}
 
           <div className="flex-1 flex items-center justify-center relative bg-black">
-            {panels[activePreviewIndex]?.imageUrl ? (
+            {panels[activePreviewIndex]?.videoUrl ? (
+              <video
+                src={panels[activePreviewIndex].videoUrl}
+                className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"
+                autoPlay
+                playsInline
+                controls={false}
+              />
+            ) : panels[activePreviewIndex]?.imageUrl ? (
               <img
                 src={panels[activePreviewIndex].imageUrl}
                 className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"

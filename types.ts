@@ -17,8 +17,10 @@ export interface Panel {
   dialogue: string;
   characterId?: string; // The character speaking (if any)
   imageUrl?: string; // Generated image base64 or URL
+  videoUrl?: string; // Generated video base64 or URL
   audioUrl?: string; // Generated or recorded audio URL
   isGeneratingImage: boolean;
+  isGeneratingVideo: boolean;
   isGeneratingAudio: boolean;
 }
 

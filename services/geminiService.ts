@@ -112,7 +112,7 @@ class GeminiService {
 
     try {
       const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -184,7 +184,7 @@ class GeminiService {
       parts.push({ text: prompt });
 
       const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         contents: { parts }
       });
 
@@ -225,7 +225,7 @@ class GeminiService {
       parts.push({ text: prompt });
 
       const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         contents: { parts }
       });
 
@@ -293,7 +293,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
         const result = await withTimeout<any>(
           // @ts-ignore
           this.getClient().models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-2.5-flash', // Upgraded to stable 2.5
             contents: [{
               role: 'user',
               parts: [{ text: "Generate an image based on this description:\n\n" + prompt }]
@@ -343,13 +343,86 @@ IMPORTANT: The background MUST match the Setting description accurately.
     }
   }
 
+  // Generate a video for a panel
+  async generatePanelVideo(
+    panelDescription: string,
+    character?: Character,
+    location?: Location
+  ): Promise<string> {
+    try {
+      let prompt = '';
+      let visualDescription = '';
+      let locationContext = '';
+
+      if (location && location.visualDescription) {
+        locationContext = `SETTING: ${location.visualDescription}`;
+      }
+
+      if (character) {
+        visualDescription = await this.getCharacterVisualDescription(character);
+        prompt = `
+          Cinematic video, Pixar-style animation. 
+          Character: ${visualDescription}.
+          Action: ${panelDescription}.
+          ${locationContext}
+          Length: 8 seconds. Include high quality spatial audio.
+        `;
+      } else {
+        prompt = `
+          Cinematic video, Pixar-style animation.
+          Action: ${panelDescription}.
+          ${locationContext}
+          Length: 8 seconds. Include high quality spatial audio.
+        `;
+      }
+
+      console.log("Generating video with prompt:", prompt);
+
+      const result = await withTimeout<any>(
+        // @ts-ignore
+        this.getClient().models.generateContent({
+          model: 'veo-3.1', // Using the latest Veo model for video
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }]
+          }],
+          config: {
+            // Video specific configuration if needed in the future
+          }
+        }),
+        180000, // 3 minute timeout for video generation
+        "Video generation timed out"
+      );
+
+      const response = result.response || result;
+      const candidates = response.candidates;
+
+      if (!candidates || candidates.length === 0) {
+        throw new Error("No candidates returned for video");
+      }
+
+      const parts = candidates[0].content?.parts;
+      const videoPart = parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/'));
+
+      if (videoPart && videoPart.inlineData) {
+        return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
+      }
+
+      throw new Error("No video generated in response.");
+
+    } catch (error) {
+      console.error("Panel video generation failed:", error);
+      throw error;
+    }
+  }
+
   // Generate TTS audio
   async generateSpeech(text: string, voiceName: string = 'Puck'): Promise<string> {
     try {
       // Wrapped in timeout to prevent hanging if the API is slow
       const response = await withTimeout<GenerateContentResponse>(
         this.getClient().models.generateContent({
-          model: 'gemini-2.0-flash-exp', // Updated to known working model
+          model: 'gemini-2.0-flash', // Upgraded to stable
           contents: { parts: [{ text }] },
           config: {
             responseModalities: [Modality.AUDIO],
