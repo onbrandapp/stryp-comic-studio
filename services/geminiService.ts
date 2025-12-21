@@ -430,8 +430,8 @@ IMPORTANT: The background MUST match the Setting description accurately.
       // Wrapped in timeout to prevent hanging if the API is slow
       const response = await withTimeout<GenerateContentResponse>(
         this.getClient().models.generateContent({
-          model: 'gemini-2.0-flash', // Upgraded to stable
-          contents: { parts: [{ text }] },
+          model: 'gemini-2.0-flash',
+          contents: [{ role: 'user', parts: [{ text }] }],
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -450,9 +450,15 @@ IMPORTANT: The background MUST match the Setting description accurately.
 
       return `data:audio/wav;base64,${base64Audio}`;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Speech generation failed:", error);
-      throw new Error("Audio generation is currently not supported by the available Gemini models for this API key. Please check back later.");
+      const errorMessage = error.message || String(error);
+
+      if (errorMessage.includes("403") || errorMessage.toLowerCase().includes("permission") || errorMessage.toLowerCase().includes("api key")) {
+        throw new Error("Audio generation is not enabled for this API key yet. Please ensure you are using a key from a region that supports Gemini 2.0 Audio.");
+      }
+
+      throw new Error(`Audio generation failed: ${errorMessage}`);
     }
   }
 }
