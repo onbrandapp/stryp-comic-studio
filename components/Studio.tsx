@@ -29,9 +29,9 @@ import {
   Film,
   ChevronDown
 } from 'lucide-react';
-import { Project, Character, Panel, AVAILABLE_VOICES, AppSettings, Location } from '../types';
+import { Project, Character, Storyboard, AVAILABLE_VOICES, AppSettings, Location } from '../types';
 import { gemini } from '../services/geminiService';
-import { uploadPanelImageFromString, uploadPanelImageFromFile, uploadPanelVideoFromString, uploadPanelAudio, updateProjectMetadata, subscribeToLocations } from '../services/firebase';
+import { uploadStoryboardImageFromString, uploadStoryboardImageFromFile, uploadStoryboardVideoFromString, uploadStoryboardAudio, updateProjectMetadata, subscribeToLocations } from '../services/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 
 interface Props {
@@ -39,17 +39,17 @@ interface Props {
   characters: Character[];
   settings: AppSettings;
   user: FirebaseUser | null;
-  onUpdatePanels: (panels: Panel[]) => void;
-  onPanelChange: (panelId: string, updates: Partial<Panel>) => void;
+  onUpdateStoryboards: (storyboards: Storyboard[]) => void;
+  onStoryboardChange: (storyboardId: string, updates: Partial<Storyboard>) => void;
   onBack: () => void;
   onSave: () => Promise<void>;
   onUpdateProjectDetails?: (title: string, summary: string) => void;
   onUpdateProject?: (updates: Partial<Project>) => void;
 }
 
-const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdatePanels, onPanelChange, onBack, onSave, onUpdateProjectDetails, onUpdateProject }) => {
-  const [panels, setPanels] = useState<Panel[]>(project.panels);
-  const [panelStates, setPanelStates] = useState<Record<string, string>>({});
+const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdateStoryboards, onStoryboardChange, onBack, onSave, onUpdateProjectDetails, onUpdateProject }) => {
+  const [storyboards, setStoryboards] = useState<Storyboard[]>(project.storyboards);
+  const [storyboardStates, setStoryboardStates] = useState<Record<string, string>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(() => {
     if (project.selectedCharacterIds) {
@@ -93,7 +93,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   }, [user]);
 
   // Audio Player State
-  const [playingPanelId, setPlayingPanelId] = useState<string | null>(null);
+  const [playingStoryboardId, setPlayingStoryboardId] = useState<string | null>(null);
 
   // Mobile UI State
   const [showMobileTools, setShowMobileTools] = useState(false);
@@ -104,8 +104,8 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
   // Manual Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingPanelId, setUploadingPanelId] = useState<string | null>(null);
-  const [activeUploadPanelId, setActiveUploadPanelId] = useState<string | null>(null);
+  const [uploadingStoryboardId, setUploadingStoryboardId] = useState<string | null>(null);
+  const [activeUploadStoryboardId, setActiveUploadStoryboardId] = useState<string | null>(null);
 
   // Update selection if characters change (e.g. added new one)
   useEffect(() => {
@@ -136,48 +136,48 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
   // SANITIZATION ON LOAD:
   useEffect(() => {
-    const cleanPanels = project.panels.map(p => ({
+    const cleanStoryboards = project.storyboards.map(p => ({
       ...p,
       isGeneratingImage: false,
       isGeneratingAudio: false
     }));
-    setPanels(cleanPanels);
+    setStoryboards(cleanStoryboards);
   }, [project.id]);
 
-  // Keep local panel state in sync with Smart Merge
+  // Keep local storyboard state in sync with Smart Merge
   useEffect(() => {
     // If a batch process is running, we manage state locally to prevent conflicts.
     if (isBatchGenerating || isBatchAudioGenerating) return;
 
-    setPanels(currentLocalPanels => {
-      return project.panels.map(serverPanel => {
-        const localPanel = currentLocalPanels.find(p => p.id === serverPanel.id);
+    setStoryboards(currentLocalStoryboards => {
+      return project.storyboards.map(serverStoryboard => {
+        const localStoryboard = currentLocalStoryboards.find(p => p.id === serverStoryboard.id);
 
         // SMART MERGE:
-        // If we have a local panel with a pending upload (Data URI) and the server 
+        // If we have a local storyboard with a pending upload (Data URI) and the server 
         // has nothing or an old URL, keep the local preview.
         // This prevents the image from "disappearing" while it uploads.
-        if (localPanel?.imageUrl?.startsWith('data:') && (!serverPanel.imageUrl || serverPanel.imageUrl !== localPanel.imageUrl)) {
-          return { ...serverPanel, imageUrl: localPanel.imageUrl };
+        if (localStoryboard?.imageUrl?.startsWith('data:') && (!serverStoryboard.imageUrl || serverStoryboard.imageUrl !== localStoryboard.imageUrl)) {
+          return { ...serverStoryboard, imageUrl: localStoryboard.imageUrl };
         }
 
-        return serverPanel;
+        return serverStoryboard;
       });
     });
-  }, [project.panels, isBatchGenerating, isBatchAudioGenerating]);
+  }, [project.storyboards, isBatchGenerating, isBatchAudioGenerating]);
 
   // Cleanup on unmount to prevent stuck states
   useEffect(() => {
     return () => {
-      setUploadingPanelId(null);
+      setUploadingStoryboardId(null);
       setIsBatchGenerating(false);
       setIsBatchAudioGenerating(false);
     };
   }, []);
 
-  const updateLocalPanels = (newPanels: Panel[]) => {
-    setPanels(newPanels);
-    onUpdatePanels(newPanels);
+  const updateLocalStoryboards = (newStoryboards: Storyboard[]) => {
+    setStoryboards(newStoryboards);
+    onUpdateStoryboards(newStoryboards);
   };
 
   const handleUpdateProject = async (shouldGenerate: boolean = false) => {
@@ -224,15 +224,15 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
   };
 
-  const togglePanelAudio = (panelId: string, audioUrl?: string) => {
+  const toggleStoryboardAudio = (storyboardId: string, audioUrl?: string) => {
     if (!audioUrl) return;
 
-    if (playingPanelId === panelId) {
+    if (playingStoryboardId === storyboardId) {
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
       }
-      setPlayingPanelId(null);
+      setPlayingStoryboardId(null);
       return;
     }
 
@@ -244,15 +244,15 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     const audio = new Audio(audioUrl);
     currentAudioRef.current = audio;
 
-    setPlayingPanelId(panelId);
+    setPlayingStoryboardId(storyboardId);
 
     audio.onended = () => {
-      setPlayingPanelId(null);
+      setPlayingStoryboardId(null);
       currentAudioRef.current = null;
     };
 
     audio.onerror = () => {
-      setPlayingPanelId(null);
+      setPlayingStoryboardId(null);
       currentAudioRef.current = null;
       alert("Failed to play audio.");
     };
@@ -295,14 +295,14 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       // Filter characters based on selection
       const activeCharacters = characters.filter(c => selectedCharacterIds.has(c.id));
 
-      const generatedPanels = await gemini.generateScript(
+      const generatedStoryboards = await gemini.generateScript(
         sceneDesc,
         mood,
         activeCharacters,
         project.summary
       );
 
-      const newPanels: Panel[] = generatedPanels.map(p => ({
+      const newStoryboards: Storyboard[] = generatedStoryboards.map(p => ({
         id: Date.now().toString() + Math.random().toString(),
         description: p.description || '',
         dialogue: p.dialogue || '',
@@ -312,7 +312,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         isGeneratingAudio: false,
       }));
 
-      updateLocalPanels([...panels, ...newPanels]);
+      updateLocalStoryboards([...storyboards, ...newStoryboards]);
       setSceneDesc('');
       if (showMobileTools) setShowMobileTools(false);
     } catch (error) {
@@ -322,80 +322,80 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
   };
 
-  const handleGenerateImage = async (panelId: string) => {
+  const handleGenerateImage = async (storyboardId: string) => {
     if (!user) {
       alert("Cannot generate image without a logged-in user.");
       return;
     }
 
-    const panel = panels.find(p => p.id === panelId);
-    if (!panel) return;
+    const storyboard = storyboards.find(p => p.id === storyboardId);
+    if (!storyboard) return;
 
-    if (panel.isGeneratingAudio || isBatchAudioGenerating) {
+    if (storyboard.isGeneratingAudio || isBatchAudioGenerating) {
       alert("Please wait for audio generation to finish.");
       return;
     }
 
     setUploadErrors(prev => {
       const newState = { ...prev };
-      delete newState[panelId];
+      delete newState[storyboardId];
       return newState;
     });
 
-    setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingImage: true } : p));
-    setPanelStates(prev => ({ ...prev, [panelId]: 'Preparing...' }));
+    setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingImage: true } : p));
+    setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Preparing...' }));
 
     try {
-      const character = characters.find(c => c.id === panel.characterId);
+      const character = characters.find(c => c.id === storyboard.characterId);
 
       if (character?.imageUrl) {
-        setPanelStates(prev => ({ ...prev, [panelId]: 'Fetching Ref...' }));
+        setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Fetching Ref...' }));
       }
 
       await new Promise(r => setTimeout(r, 100));
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Generating...' }));
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Generating...' }));
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Generating...' }));
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Generating...' }));
 
       const activeLocation = locations.find(l => l.id === activeLocationId);
 
-      const base64ImageDataUrl = await gemini.generatePanelImage(
-        panel.description,
+      const base64ImageDataUrl = await gemini.generateStoryboardImage(
+        storyboard.description,
         character,
         activeLocation
       );
 
-      setPanels(prev => {
+      setStoryboards(prev => {
         const updated = prev.map(p =>
-          p.id === panelId ? { ...p, imageUrl: base64ImageDataUrl, isGeneratingImage: false } : p
+          p.id === storyboardId ? { ...p, imageUrl: base64ImageDataUrl, isGeneratingImage: false } : p
         );
         return updated;
       });
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Uploading...' }));
-      setUploadingPanelId(panelId);
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Uploading...' }));
+      setUploadingStoryboardId(storyboardId);
 
       try {
-        const finalImageUrl = await uploadPanelImageFromString(user.uid, base64ImageDataUrl);
+        const finalImageUrl = await uploadStoryboardImageFromString(user.uid, base64ImageDataUrl);
 
         // ATOMIC UPDATE: Send to parent immediately to ensure persistence
-        onPanelChange(panelId, { imageUrl: finalImageUrl });
+        onStoryboardChange(storyboardId, { imageUrl: finalImageUrl });
 
         // Also update local state for immediate UI reflection
-        setPanels(prev => prev.map(p =>
-          p.id === panelId ? { ...p, imageUrl: finalImageUrl } : p
+        setStoryboards(prev => prev.map(p =>
+          p.id === storyboardId ? { ...p, imageUrl: finalImageUrl } : p
         ));
 
       } catch (uploadError) {
         console.error("Background upload failed:", uploadError);
-        setUploadErrors(prev => ({ ...prev, [panelId]: "Save failed. Image is local only." }));
+        setUploadErrors(prev => ({ ...prev, [storyboardId]: "Save failed. Image is local only." }));
       }
 
     } catch (error) {
       console.error("Image generation failed:", error);
 
-      setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingImage: false } : p));
+      setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingImage: false } : p));
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes("timed out")) {
@@ -404,91 +404,91 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         alert(`Generation failed: ${errorMessage}`);
       }
     } finally {
-      console.log(`[Studio] Generation finally block for panel ${panelId}. Clearing states.`);
-      setPanelStates(prev => {
+      console.log(`[Studio] Generation finally block for storyboard ${storyboardId}. Clearing states.`);
+      setStoryboardStates(prev => {
         const newState = { ...prev };
-        delete newState[panelId];
+        delete newState[storyboardId];
         return newState;
       });
-      setUploadingPanelId(null);
+      setUploadingStoryboardId(null);
     }
   };
 
-  const handleGenerateVideo = async (panelId: string) => {
+  const handleGenerateVideo = async (storyboardId: string) => {
     if (!user) {
       alert("Cannot generate video without a logged-in user.");
       return;
     }
 
-    const panel = panels.find(p => p.id === panelId);
-    if (!panel) return;
+    const storyboard = storyboards.find(p => p.id === storyboardId);
+    if (!storyboard) return;
 
-    if (panel.isGeneratingAudio || isBatchAudioGenerating) {
+    if (storyboard.isGeneratingAudio || isBatchAudioGenerating) {
       alert("Please wait for audio generation to finish.");
       return;
     }
 
     setUploadErrors(prev => {
       const newState = { ...prev };
-      delete newState[panelId];
+      delete newState[storyboardId];
       return newState;
     });
 
-    setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingVideo: true } : p));
-    setPanelStates(prev => ({ ...prev, [panelId]: 'Preparing...' }));
+    setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingVideo: true } : p));
+    setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Preparing...' }));
 
     try {
-      const character = characters.find(c => c.id === panel.characterId);
+      const character = characters.find(c => c.id === storyboard.characterId);
       const activeLocation = locations.find(l => l.id === activeLocationId);
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Director at work...' }));
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Director at work...' }));
       await new Promise(r => setTimeout(r, 100));
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Generating Video...' }));
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Generating Video...' }));
 
-      const base64VideoDataUrl = await gemini.generatePanelVideo(
-        panel.description,
+      const base64VideoDataUrl = await gemini.generateStoryboardVideo(
+        storyboard.description,
         character,
         activeLocation
       );
 
-      setPanels(prev => {
+      setStoryboards(prev => {
         const updated = prev.map(p =>
-          p.id === panelId ? { ...p, videoUrl: base64VideoDataUrl, isGeneratingVideo: false } : p
+          p.id === storyboardId ? { ...p, videoUrl: base64VideoDataUrl, isGeneratingVideo: false } : p
         );
         return updated;
       });
 
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Uploading Film...' }));
-      setUploadingPanelId(panelId);
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Uploading Film...' }));
+      setUploadingStoryboardId(storyboardId);
 
       try {
-        const finalVideoUrl = await uploadPanelVideoFromString(user.uid, base64VideoDataUrl);
+        const finalVideoUrl = await uploadStoryboardVideoFromString(user.uid, base64VideoDataUrl);
 
-        onPanelChange(panelId, { videoUrl: finalVideoUrl });
+        onStoryboardChange(storyboardId, { videoUrl: finalVideoUrl });
 
-        setPanels(prev => prev.map(p =>
-          p.id === panelId ? { ...p, videoUrl: finalVideoUrl } : p
+        setStoryboards(prev => prev.map(p =>
+          p.id === storyboardId ? { ...p, videoUrl: finalVideoUrl } : p
         ));
 
       } catch (uploadError) {
         console.error("Background video upload failed:", uploadError);
-        setUploadErrors(prev => ({ ...prev, [panelId]: "Save failed. Video is local only." }));
+        setUploadErrors(prev => ({ ...prev, [storyboardId]: "Save failed. Video is local only." }));
       }
 
     } catch (error) {
       console.error("Video generation failed:", error);
-      setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingVideo: false } : p));
+      setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingVideo: false } : p));
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       alert(`Video generation failed: ${errorMessage}`);
     } finally {
-      setPanelStates(prev => {
+      setStoryboardStates(prev => {
         const newState = { ...prev };
-        delete newState[panelId];
+        delete newState[storyboardId];
         return newState;
       });
-      setUploadingPanelId(null);
+      setUploadingStoryboardId(null);
     }
   };
 
@@ -499,23 +499,23 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
 
     const isVideoMode = project.mode === 'video';
-    const panelsToGenerate = panels.filter(p => isVideoMode ? (!p.videoUrl && !p.isGeneratingVideo) : (!p.imageUrl && !p.isGeneratingImage));
+    const storyboardsToGenerate = storyboards.filter(p => isVideoMode ? (!p.videoUrl && !p.isGeneratingVideo) : (!p.imageUrl && !p.isGeneratingImage));
 
-    if (panelsToGenerate.length === 0) {
-      alert(`All panels already have ${isVideoMode ? 'videos' : 'visuals'}!`);
+    if (storyboardsToGenerate.length === 0) {
+      alert(`All storyboards already have ${isVideoMode ? 'videos' : 'visuals'}!`);
       return;
     }
 
-    if (!confirm(`Generate ${isVideoMode ? 'videos' : 'visuals'} for ${panelsToGenerate.length} panels? This may take a moment.`)) return;
+    if (!confirm(`Generate ${isVideoMode ? 'videos' : 'visuals'} for ${storyboardsToGenerate.length} storyboards? This may take a moment.`)) return;
 
     setIsBatchGenerating(true);
 
     try {
-      for (const panel of panelsToGenerate) {
+      for (const storyboard of storyboardsToGenerate) {
         if (isVideoMode) {
-          await handleGenerateVideo(panel.id);
+          await handleGenerateVideo(storyboard.id);
         } else {
-          handleGenerateImage(panel.id);
+          handleGenerateImage(storyboard.id);
         }
         // Stagger requests
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -525,47 +525,47 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
   };
 
-  const handleGenerateAudio = async (panelId: string, silent = false) => {
+  const handleGenerateAudio = async (storyboardId: string, silent = false) => {
     if (!user) {
       if (!silent) alert("Cannot generate audio without a logged-in user.");
       return;
     }
-    const panel = panels.find(p => p.id === panelId);
-    if (!panel || !panel.dialogue) return;
+    const storyboard = storyboards.find(p => p.id === storyboardId);
+    if (!storyboard || !storyboard.dialogue) return;
 
-    if (panel.isGeneratingImage || isBatchGenerating) {
+    if (storyboard.isGeneratingImage || isBatchGenerating) {
       if (!silent) alert("Please wait for image generation to finish.");
       return;
     }
 
-    setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingAudio: true } : p));
+    setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingAudio: true } : p));
 
     try {
-      const character = characters.find(c => c.id === panel.characterId);
+      const character = characters.find(c => c.id === storyboard.characterId);
       const voiceId = character?.voiceId || settings.defaultNarratorVoiceId || AVAILABLE_VOICES[0].id;
 
-      const base64Audio = await gemini.generateSpeech(panel.dialogue, voiceId);
+      const base64Audio = await gemini.generateSpeech(storyboard.dialogue, voiceId);
 
       // OPTIMISTIC UPDATE
-      setPanelStates(prev => ({ ...prev, [panelId]: 'Saving Audio...' }));
+      setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Saving Audio...' }));
 
-      const storageAudioUrl = await uploadPanelAudio(user.uid, base64Audio);
+      const storageAudioUrl = await uploadStoryboardAudio(user.uid, base64Audio);
 
       // ATOMIC UPDATE
-      onPanelChange(panelId, { audioUrl: storageAudioUrl });
+      onStoryboardChange(storyboardId, { audioUrl: storageAudioUrl });
 
-      setPanels(prev => prev.map(p =>
-        p.id === panelId ? { ...p, audioUrl: storageAudioUrl, isGeneratingAudio: false } : p
+      setStoryboards(prev => prev.map(p =>
+        p.id === storyboardId ? { ...p, audioUrl: storageAudioUrl, isGeneratingAudio: false } : p
       ));
 
     } catch (error) {
       console.error("Audio gen failed", error);
       if (!silent) alert(`Audio generation failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setPanels(prev => prev.map(p => p.id === panelId ? { ...p, isGeneratingAudio: false } : p));
-      setPanelStates(prev => {
+      setStoryboards(prev => prev.map(p => p.id === storyboardId ? { ...p, isGeneratingAudio: false } : p));
+      setStoryboardStates(prev => {
         const newState = { ...prev };
-        delete newState[panelId];
+        delete newState[storyboardId];
         return newState;
       });
     }
@@ -577,19 +577,19 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       return;
     }
 
-    const panelsToGenerate = panels.filter(p => p.dialogue && !p.audioUrl && !p.isGeneratingAudio);
-    if (panelsToGenerate.length === 0) {
+    const storyboardsToGenerate = storyboards.filter(p => p.dialogue && !p.audioUrl && !p.isGeneratingAudio);
+    if (storyboardsToGenerate.length === 0) {
       alert("All speech has been generated!");
       return;
     }
 
-    if (!confirm(`Generate voiceovers for ${panelsToGenerate.length} panels?`)) return;
+    if (!confirm(`Generate voiceovers for ${storyboardsToGenerate.length} storyboards?`)) return;
 
     setIsBatchAudioGenerating(true);
     try {
-      for (const panel of panelsToGenerate) {
+      for (const storyboard of storyboardsToGenerate) {
         // Pass 'true' for silent to avoid alert spam if one fails
-        await handleGenerateAudio(panel.id, true);
+        await handleGenerateAudio(storyboard.id, true);
         // Stagger requests slightly to avoid flooding but allow parallel uploads
         await new Promise(r => setTimeout(r, 500));
       }
@@ -610,12 +610,12 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     }
   };
 
-  const deletePanel = (id: string) => {
-    updateLocalPanels(panels.filter(p => p.id !== id));
+  const deleteStoryboard = (id: string) => {
+    updateLocalStoryboards(storyboards.filter(p => p.id !== id));
   };
 
-  const triggerFileUpload = (panelId: string) => {
-    setActiveUploadPanelId(panelId);
+  const triggerFileUpload = (storyboardId: string) => {
+    setActiveUploadStoryboardId(storyboardId);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
@@ -624,49 +624,49 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeUploadPanelId || !user) return;
+    if (!file || !activeUploadStoryboardId || !user) return;
 
     if (!file.type.startsWith('image/')) {
       alert('Please upload a valid image file (JPG, PNG).');
       return;
     }
 
-    const panelId = activeUploadPanelId;
-    setUploadingPanelId(panelId);
+    const storyboardId = activeUploadStoryboardId;
+    setUploadingStoryboardId(storyboardId);
 
     setUploadErrors(prev => {
       const newState = { ...prev };
-      delete newState[panelId];
+      delete newState[storyboardId];
       return newState;
     });
 
     const localUrl = URL.createObjectURL(file);
-    setPanels(prev => prev.map(p =>
-      p.id === panelId ? { ...p, imageUrl: localUrl } : p
+    setStoryboards(prev => prev.map(p =>
+      p.id === storyboardId ? { ...p, imageUrl: localUrl } : p
     ));
 
     try {
-      const downloadUrl = await uploadPanelImageFromFile(user.uid, file);
+      const downloadUrl = await uploadStoryboardImageFromFile(user.uid, file);
 
       // ATOMIC UPDATE
-      onPanelChange(panelId, { imageUrl: downloadUrl });
+      onStoryboardChange(storyboardId, { imageUrl: downloadUrl });
 
-      setPanels(prev => prev.map(p =>
-        p.id === panelId ? { ...p, imageUrl: downloadUrl } : p
+      setStoryboards(prev => prev.map(p =>
+        p.id === storyboardId ? { ...p, imageUrl: downloadUrl } : p
       ));
 
     } catch (error) {
       console.error("Manual upload failed:", error);
-      setUploadErrors(prev => ({ ...prev, [panelId]: "Upload failed. Image is local only." }));
+      setUploadErrors(prev => ({ ...prev, [storyboardId]: "Upload failed. Image is local only." }));
     } finally {
-      setUploadingPanelId(null);
-      setActiveUploadPanelId(null);
+      setUploadingStoryboardId(null);
+      setActiveUploadStoryboardId(null);
     }
   };
 
   const handleExport = () => {
     const safeTitle = project.title.replace(/["<>\\]/g, '');
-    const panelsData = JSON.stringify(panels);
+    const storyboardsData = JSON.stringify(storyboards);
     const charactersData = JSON.stringify(characters);
 
     const htmlContent = `<!DOCTYPE html>
@@ -702,20 +702,20 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     </div>
     <div id="controls">
         <button onclick="togglePlay()" id="play-btn">Pause</button>
-        <button onclick="prevPanel()">Prev</button>
-        <button onclick="nextPanel()">Next</button>
+        <button onclick="prevStoryboard()">Prev</button>
+        <button onclick="nextStoryboard()">Next</button>
     </div>
     <script>
-        const panels = ${panelsData};
+        const storyboards = ${storyboardsData};
         const characters = ${charactersData};
-        const panelDelay = ${settings.panelDelay || 2000};
+        const storyboardDelay = ${settings.storyboardDelay || 2000};
         let currentIndex = 0;
         let isPlaying = false;
         let audio = null;
         let timeout = null;
 
-        function showPanel(index) {
-            if (index >= panels.length) {
+        function showStoryboard(index) {
+            if (index >= storyboards.length) {
                 isPlaying = false;
                 document.getElementById('start-screen').style.display = 'flex';
                 document.getElementById('start-screen').innerHTML = '<h1>The End</h1><button onclick="restart()">Replay</button>';
@@ -724,7 +724,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
             if (index < 0) index = 0;
             currentIndex = index;
 
-            const panel = panels[index];
+            const storyboard = storyboards[index];
             const img = document.getElementById('current-img');
             const vid = document.getElementById('current-vid');
             
@@ -733,38 +733,38 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
             vid.pause();
 
             setTimeout(() => {
-                if (panel.videoUrl) {
-                    vid.src = panel.videoUrl;
+                if (storyboard.videoUrl) {
+                    vid.src = storyboard.videoUrl;
                     vid.oncanplay = () => {
                         vid.classList.add('visible');
                         if (isPlaying) vid.play();
                     };
                 } else {
-                    img.src = panel.imageUrl || '';
+                    img.src = storyboard.imageUrl || '';
                     img.onload = () => img.classList.add('visible');
                 }
             }, 50);
             
             const captionEl = document.getElementById('captions');
-            const charName = panel.characterId ? characters.find(c => c.id === panel.characterId)?.name : '';
+            const charName = storyboard.characterId ? characters.find(c => c.id === storyboard.characterId)?.name : '';
             
             let html = '';
             if (charName) html += '<span class="character-name">' + charName + '</span>';
-            html += panel.dialogue || '';
+            html += storyboard.dialogue || '';
             captionEl.innerHTML = html;
 
             if (audio) { audio.pause(); audio = null; }
             if (timeout) { clearTimeout(timeout); timeout = null; }
 
             if (isPlaying) {
-                if (panel.audioUrl) {
-                    audio = new Audio(panel.audioUrl);
-                    audio.onended = () => nextPanel();
-                    audio.onerror = () => { setTimeout(nextPanel, 3000); };
-                    audio.play().catch(e => { console.log("Autoplay prevented", e); setTimeout(nextPanel, 3000); });
+                if (storyboard.audioUrl) {
+                    audio = new Audio(storyboard.audioUrl);
+                    audio.onended = () => nextStoryboard();
+                    audio.onerror = () => { setTimeout(nextStoryboard, 3000); };
+                    audio.play().catch(e => { console.log("Autoplay prevented", e); setTimeout(nextStoryboard, 3000); });
                 } else {
                     // Default delay if no audio
-                    timeout = setTimeout(nextPanel, panelDelay);
+                    timeout = setTimeout(nextStoryboard, storyboardDelay);
                 }
             }
         }
@@ -773,7 +773,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
             document.getElementById('start-screen').style.display = 'none';
             isPlaying = true;
             currentIndex = 0;
-            showPanel(0);
+            showStoryboard(0);
             document.getElementById('play-btn').innerText = 'Pause';
         }
 
@@ -786,19 +786,19 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
             document.getElementById('play-btn').innerText = isPlaying ? 'Pause' : 'Play';
             if (isPlaying) {
                 if (audio && audio.paused) audio.play();
-                else if (!audio) showPanel(currentIndex);
+                else if (!audio) showStoryboard(currentIndex);
             } else {
                 if (audio) audio.pause();
                 if (timeout) clearTimeout(timeout);
             }
         }
 
-        function nextPanel() {
-            showPanel(currentIndex + 1);
+        function nextStoryboard() {
+            showStoryboard(currentIndex + 1);
         }
 
-        function prevPanel() {
-            showPanel(currentIndex - 1);
+        function prevStoryboard() {
+            showStoryboard(currentIndex - 1);
         }
     </script>
 </body>
@@ -816,7 +816,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   };
 
   const playPreview = async () => {
-    if (panels.length === 0) return;
+    if (storyboards.length === 0) return;
 
     isPlayingRef.current = true;
     setIsPreviewPlaying(true);
@@ -825,20 +825,20 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
-      setPlayingPanelId(null);
+      setPlayingStoryboardId(null);
     }
 
-    for (let i = 0; i < panels.length; i++) {
+    for (let i = 0; i < storyboards.length; i++) {
       if (!isPlayingRef.current) break;
 
       setActivePreviewIndex(i);
-      const panel = panels[i];
+      const storyboard = storyboards[i];
 
-      if (panel.audioUrl) {
+      if (storyboard.audioUrl) {
         await new Promise<void>((resolve) => {
           if (!isPlayingRef.current) { resolve(); return; }
 
-          const audio = new Audio(panel.audioUrl);
+          const audio = new Audio(storyboard.audioUrl);
           currentAudioRef.current = audio;
 
           audio.onended = () => {
@@ -859,7 +859,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           }, 30000);
         });
       } else {
-        await new Promise(r => setTimeout(r, settings.panelDelay || 2000));
+        await new Promise(r => setTimeout(r, settings.storyboardDelay || 2000));
       }
     }
 
@@ -1004,7 +1004,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors border border-slate-700"
             >
               {isGeneratingScript ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-              Generate Panels
+              Generate Storyboards
             </button>
           </div>
         </div>
@@ -1053,7 +1053,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           <div className="flex items-center gap-4">
             <button
               onClick={() => {
-                if (uploadingPanelId || isBatchGenerating || isBatchAudioGenerating) {
+                if (uploadingStoryboardId || isBatchGenerating || isBatchAudioGenerating) {
                   if (!confirm("Uploads or generations are in progress. Leaving now may result in lost data. Are you sure?")) {
                     return;
                   }
@@ -1114,12 +1114,12 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           )}
 
           {/* Generate All Audio */}
-          {!isPreviewPlaying && panels.some(p => p.dialogue && !p.audioUrl) && (
+          {!isPreviewPlaying && storyboards.some(p => p.dialogue && !p.audioUrl) && (
             <button
               onClick={handleGenerateAllAudio}
               disabled={isBatchAudioGenerating || isBatchGenerating}
               className={`flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isBatchAudioGenerating ? 'opacity-70 cursor-wait' : ''}`}
-              title="Generate audio for all panels with dialogue"
+              title="Generate audio for all storyboards with dialogue"
             >
               {isBatchAudioGenerating ? <Loader2 className="animate-spin text-cyan-400" size={16} /> : <Volume2 size={16} className="text-cyan-400" />}
               <span className="hidden md:inline">{isBatchAudioGenerating ? 'Processing...' : 'Generate Audio'}</span>
@@ -1127,12 +1127,12 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           )}
 
           {/* Generate All Visuals */}
-          {!isPreviewPlaying && panels.some(p => !p.imageUrl) && (
+          {!isPreviewPlaying && storyboards.some(p => !p.imageUrl) && (
             <button
               onClick={handleGenerateAllVisuals}
               disabled={isBatchGenerating || isBatchAudioGenerating}
               className={`flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isBatchGenerating ? 'opacity-70 cursor-wait' : ''}`}
-              title="Generate visuals for all empty panels"
+              title="Generate visuals for all empty storyboards"
             >
               {isBatchGenerating ? <Loader2 className="animate-spin text-amber-400" size={16} /> : <Sparkles size={16} className="text-amber-400" />}
               <span className="hidden md:inline">{isBatchGenerating ? 'Processing...' : 'Generate Visuals'}</span>
@@ -1198,11 +1198,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           {/* Editor View */}
           {!isPreviewPlaying && (
             <div className="max-w-4xl mx-auto space-y-8 pb-20">
-              {panels.length === 0 && (
+              {storyboards.length === 0 && (
                 <div className="text-center py-20 opacity-50">
                   <Wand2 size={48} className="mx-auto mb-4 text-slate-600" />
                   <h2 className="text-xl text-slate-400">Your storyboard is empty.</h2>
-                  <p className="text-slate-600">Use the AI Generator or add panels manually.</p>
+                  <p className="text-slate-600">Use the AI Generator or add storyboards manually.</p>
 
                   {/* Mobile-only CTA to open tools if empty */}
                   <button
@@ -1214,12 +1214,12 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                 </div>
               )}
 
-              {panels.map((panel, index) => (
-                <div key={panel.id} className="group relative bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden hover:border-slate-700 transition-all">
+              {storyboards.map((storyboard, index) => (
+                <div key={storyboard.id} className="group relative bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden hover:border-slate-700 transition-all">
                   <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900/50">
-                    <span className="font-mono text-xs text-slate-500 font-bold">PANEL {index + 1}</span>
+                    <span className="font-mono text-xs text-slate-500 font-bold">STORYBOARD {index + 1}</span>
                     <div className="flex gap-2">
-                      <button onClick={() => deletePanel(panel.id)} className="p-1.5 hover:bg-rose-500/20 hover:text-rose-400 text-slate-600 rounded">
+                      <button onClick={() => deleteStoryboard(storyboard.id)} className="p-1.5 hover:bg-rose-500/20 hover:text-rose-400 text-slate-600 rounded">
 
                         <Trash2 size={16} />
                       </button>
@@ -1228,17 +1228,17 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
                   <div className="flex flex-col md:flex-row">
                     <div className="w-full md:w-1/2 aspect-video bg-black relative flex items-center justify-center border-r border-slate-800 group-hover:border-slate-700">
-                      {panel.videoUrl ? (
+                      {storyboard.videoUrl ? (
                         <video
-                          src={panel.videoUrl}
+                          src={storyboard.videoUrl}
                           className="w-full h-full object-cover"
                           autoPlay
                           loop
                           muted
                           playsInline
                         />
-                      ) : panel.imageUrl ? (
-                        <img src={panel.imageUrl} alt="Panel" className="w-full h-full object-cover" />
+                      ) : storyboard.imageUrl ? (
+                        <img src={storyboard.imageUrl} alt="Storyboard" className="w-full h-full object-cover" />
                       ) : (
                         <div className="text-center p-6 w-full">
                           <ImageIcon className="mx-auto text-slate-700 mb-2" size={32} />
@@ -1247,55 +1247,55 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                           <div className="flex flex-wrap justify-center gap-2">
                             {project.mode === 'video' ? (
                               <button
-                                onClick={() => handleGenerateVideo(panel.id)}
-                                disabled={panel.isGeneratingVideo || uploadingPanelId === panel.id}
+                                onClick={() => handleGenerateVideo(storyboard.id)}
+                                disabled={storyboard.isGeneratingVideo || uploadingStoryboardId === storyboard.id}
                                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
                               >
-                                {panel.isGeneratingVideo ? <Loader2 className="animate-spin" size={14} /> : <Film size={14} />}
-                                {panel.isGeneratingVideo ? 'Directing...' : 'AI Generate Video'}
+                                {storyboard.isGeneratingVideo ? <Loader2 className="animate-spin" size={14} /> : <Film size={14} />}
+                                {storyboard.isGeneratingVideo ? 'Directing...' : 'AI Generate Video'}
                               </button>
                             ) : (
                               <button
-                                onClick={() => handleGenerateImage(panel.id)}
-                                disabled={panel.isGeneratingImage || uploadingPanelId === panel.id}
+                                onClick={() => handleGenerateImage(storyboard.id)}
+                                disabled={storyboard.isGeneratingImage || uploadingStoryboardId === storyboard.id}
                                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
                               >
-                                {panel.isGeneratingImage ? <Loader2 className="animate-spin" size={14} /> : <Wand2 size={14} />}
-                                {panel.isGeneratingImage ? 'Generating...' : 'AI Generate Image'}
+                                {storyboard.isGeneratingImage ? <Loader2 className="animate-spin" size={14} /> : <Wand2 size={14} />}
+                                {storyboard.isGeneratingImage ? 'Generating...' : 'AI Generate Image'}
                               </button>
                             )}
 
                             <button
-                              onClick={() => triggerFileUpload(panel.id)}
-                              disabled={panel.isGeneratingImage || panel.isGeneratingVideo || uploadingPanelId === panel.id}
+                              onClick={() => triggerFileUpload(storyboard.id)}
+                              disabled={storyboard.isGeneratingImage || storyboard.isGeneratingVideo || uploadingStoryboardId === storyboard.id}
                               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-white transition-colors flex items-center gap-2"
                             >
-                              {uploadingPanelId === panel.id ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-                              {uploadingPanelId === panel.id ? 'Uploading...' : 'Upload File'}
+                              {uploadingStoryboardId === storyboard.id ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+                              {uploadingStoryboardId === storyboard.id ? 'Uploading...' : 'Upload File'}
                             </button>
                           </div>
 
-                          {(panel.isGeneratingImage || panel.isGeneratingVideo) && panelStates[panel.id] && (
+                          {(storyboard.isGeneratingImage || storyboard.isGeneratingVideo) && storyboardStates[storyboard.id] && (
                             <span className="text-[10px] text-indigo-400 font-mono animate-pulse mt-2 block">
-                              {panelStates[panel.id]}
+                              {storyboardStates[storyboard.id]}
                             </span>
                           )}
                         </div>
                       )}
 
-                      {(panel.imageUrl || panel.videoUrl) && (
+                      {(storyboard.imageUrl || storyboard.videoUrl) && (
                         <>
                           <div className="absolute top-2 left-2 bg-indigo-600/90 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm border border-indigo-400/30 z-10 pointer-events-none">
                             <User size={10} />
                             <span className="font-semibold">Ref Used</span>
                           </div>
-                          {uploadErrors[panel.id] && (
+                          {uploadErrors[storyboard.id] && (
                             <div className="absolute bottom-2 left-2 right-2 bg-amber-500/90 text-white text-[10px] px-2 py-1.5 rounded flex items-center gap-1.5 backdrop-blur-md shadow-lg animate-pulse">
                               <AlertTriangle size={12} />
-                              {uploadErrors[panel.id]}
+                              {uploadErrors[storyboard.id]}
                             </div>
                           )}
-                          {uploadingPanelId === panel.id && (
+                          {uploadingStoryboardId === storyboard.id && (
                             <div className="absolute bottom-2 right-2 bg-cyan-600/90 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm border border-cyan-400/30 z-20 animate-pulse pointer-events-none">
                               <RefreshCw size={10} className="animate-spin" />
                               <span className="font-semibold">Syncing...</span>
@@ -1304,14 +1304,14 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
                           <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => triggerFileUpload(panel.id)}
+                              onClick={() => triggerFileUpload(storyboard.id)}
                               className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
                               title="Upload Replacement"
                             >
                               <Upload size={16} />
                             </button>
                             <button
-                              onClick={() => project.mode === 'video' ? handleGenerateVideo(panel.id) : handleGenerateImage(panel.id)}
+                              onClick={() => project.mode === 'video' ? handleGenerateVideo(storyboard.id) : handleGenerateImage(storyboard.id)}
                               className="p-2 bg-black/60 text-white rounded-lg hover:bg-indigo-600 backdrop-blur-sm"
                               title="Regenerate with AI"
                             >
@@ -1322,11 +1322,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                       )}
 
                       {/* Blocking Overlay ONLY for generation, not upload */}
-                      {(panel.isGeneratingImage || panel.isGeneratingVideo) && (
+                      {(storyboard.isGeneratingImage || storyboard.isGeneratingVideo) && (
                         <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-20">
                           <Loader2 className="animate-spin text-white mb-2" size={24} />
                           <span className="text-xs text-white font-medium">
-                            {panelStates[panel.id] || 'Processing...'}
+                            {storyboardStates[storyboard.id] || 'Processing...'}
                           </span>
                         </div>
                       )}
@@ -1336,11 +1336,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                       <div>
                         <label className="block text-xs text-slate-500 font-bold uppercase mb-1">Visual Description</label>
                         <textarea
-                          value={panel.description}
+                          value={storyboard.description}
                           onChange={(e) => {
-                            const newPanels = [...panels];
-                            newPanels[index].description = e.target.value;
-                            updateLocalPanels(newPanels);
+                            const newStoryboards = [...storyboards];
+                            newStoryboards[index].description = e.target.value;
+                            updateLocalStoryboards(newStoryboards);
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-slate-300 focus:border-indigo-500 h-24 resize-none"
                         />
@@ -1349,11 +1349,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                       <div className="flex-1 flex flex-col">
                         <label className="block text-xs text-slate-500 font-bold uppercase mb-1">Dialogue / Caption</label>
                         <textarea
-                          value={panel.dialogue}
+                          value={storyboard.dialogue}
                           onChange={(e) => {
-                            const newPanels = [...panels];
-                            newPanels[index].dialogue = e.target.value;
-                            updateLocalPanels(newPanels);
+                            const newStoryboards = [...storyboards];
+                            newStoryboards[index].dialogue = e.target.value;
+                            updateLocalStoryboards(newStoryboards);
                           }}
                           className="w-full flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white focus:border-indigo-500 resize-none font-sans min-h-[80px]"
                         />
@@ -1361,11 +1361,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
                       <div className="flex items-center gap-2 mt-auto pt-2">
                         <select
-                          value={panel.characterId || ''}
+                          value={storyboard.characterId || ''}
                           onChange={(e) => {
-                            const newPanels = [...panels];
-                            newPanels[index].characterId = e.target.value;
-                            updateLocalPanels(newPanels);
+                            const newStoryboards = [...storyboards];
+                            newStoryboards[index].characterId = e.target.value;
+                            updateLocalStoryboards(newStoryboards);
                           }}
                           className="bg-slate-950 border border-slate-800 rounded text-xs text-slate-300 p-2 flex-1 focus:border-indigo-500 outline-none w-full min-w-0"
                         >
@@ -1375,28 +1375,28 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                           ))}
                         </select>
 
-                        {panel.audioUrl && (
+                        {storyboard.audioUrl && (
                           <button
-                            onClick={() => togglePanelAudio(panel.id, panel.audioUrl)}
-                            className={`p-2 rounded border shrink-0 transition-colors ${playingPanelId === panel.id
+                            onClick={() => toggleStoryboardAudio(storyboard.id, storyboard.audioUrl)}
+                            className={`p-2 rounded border shrink-0 transition-colors ${playingStoryboardId === storyboard.id
                               ? 'bg-rose-900/30 text-rose-400 border-rose-900 hover:bg-rose-900/50'
                               : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-900/50'
                               }`}
-                            title={playingPanelId === panel.id ? "Stop Audio" : "Play Audio"}
+                            title={playingStoryboardId === storyboard.id ? "Stop Audio" : "Play Audio"}
                           >
-                            {playingPanelId === panel.id ? <StopCircle size={16} /> : <Play size={16} />}
+                            {playingStoryboardId === storyboard.id ? <StopCircle size={16} /> : <Play size={16} />}
                           </button>
                         )}
                         <button
-                          onClick={() => handleGenerateAudio(panel.id)}
-                          disabled={panel.isGeneratingAudio || !panel.dialogue || panel.isGeneratingImage}
-                          className={`p-2 rounded transition-colors flex items-center justify-center shrink-0 ${panel.characterId
+                          onClick={() => handleGenerateAudio(storyboard.id)}
+                          disabled={storyboard.isGeneratingAudio || !storyboard.dialogue || storyboard.isGeneratingImage}
+                          className={`p-2 rounded transition-colors flex items-center justify-center shrink-0 ${storyboard.characterId
                             ? 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/30'
                             : 'bg-amber-600/20 text-amber-400 hover:bg-amber-600 hover:text-white border border-amber-500/30'
-                            } ${(!panel.dialogue || panel.isGeneratingImage) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={panel.characterId ? "Generate Character Speech" : "Generate Caption/Narrator Speech"}
+                            } ${(!storyboard.dialogue || storyboard.isGeneratingImage) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={storyboard.characterId ? "Generate Character Speech" : "Generate Caption/Narrator Speech"}
                         >
-                          {panel.isGeneratingAudio ? (
+                          {storyboard.isGeneratingAudio ? (
                             <Loader2 className="animate-spin" size={16} />
                           ) : (
                             <Mic size={16} />
@@ -1410,7 +1410,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
               <button
                 onClick={() => {
-                  const newPanel: Panel = {
+                  const newStoryboard: Storyboard = {
                     id: Date.now().toString(),
                     description: '',
                     dialogue: '',
@@ -1418,11 +1418,11 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                     isGeneratingVideo: false,
                     isGeneratingAudio: false,
                   };
-                  updateLocalPanels([...panels, newPanel]);
+                  updateLocalStoryboards([...storyboards, newStoryboard]);
                 }}
                 className="w-full py-4 border-2 border-dashed border-slate-800 rounded-xl text-slate-600 hover:text-indigo-400 hover:border-indigo-500/50 transition-all flex items-center justify-center gap-2"
               >
-                <Plus size={20} /> Add Blank Panel
+                <Plus size={20} /> Add Blank Storyboard
               </button>
             </div>
           )}
@@ -1583,7 +1583,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                     className="md:hidden w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isGeneratingScript ? <Loader2 className="animate-spin" size={20} /> : <Wand2 size={20} />}
-                    Save & Generate Panels
+                    Save & Generate Storyboards
                   </button>
 
                   <div className="flex justify-end gap-3">
@@ -1618,19 +1618,19 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
            */}
 
           <div className="flex-1 flex items-center justify-center relative bg-black">
-            {panels[activePreviewIndex]?.videoUrl ? (
+            {storyboards[activePreviewIndex]?.videoUrl ? (
               <video
-                src={panels[activePreviewIndex].videoUrl}
+                src={storyboards[activePreviewIndex].videoUrl}
                 className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"
                 autoPlay
                 playsInline
                 controls={false}
               />
-            ) : panels[activePreviewIndex]?.imageUrl ? (
+            ) : storyboards[activePreviewIndex]?.imageUrl ? (
               <img
-                src={panels[activePreviewIndex].imageUrl}
+                src={storyboards[activePreviewIndex].imageUrl}
                 className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"
-                alt="Panel"
+                alt="Storyboard"
               />
             ) : (
               <div className="text-slate-600 flex flex-col items-center">
@@ -1641,13 +1641,13 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
             {/* Caption Overlay - Matching the HTML download style */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pb-2 text-center flex flex-col items-center justify-end min-h-[120px]">
-              {panels[activePreviewIndex]?.characterId && (
+              {storyboards[activePreviewIndex]?.characterId && (
                 <span className="text-cyan-400 font-bold text-sm mb-1 uppercase tracking-wider block">
-                  {characters.find(c => c.id === panels[activePreviewIndex].characterId)?.name}
+                  {characters.find(c => c.id === storyboards[activePreviewIndex].characterId)?.name}
                 </span>
               )}
               <p className="text-white text-xl md:text-2xl font-medium leading-relaxed drop-shadow-md pb-4">
-                {panels[activePreviewIndex]?.dialogue}
+                {storyboards[activePreviewIndex]?.dialogue}
               </p>
             </div>
           </div>

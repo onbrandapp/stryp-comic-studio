@@ -61,9 +61,9 @@ const Settings: React.FC<SettingsProps> = ({ settings, user, onUpdateSettings, o
                     </h2>
                     <div className="w-full">
                         <label className="block text-sm font-medium text-slate-300 mb-2">
-                            Panel Duration
+                            Storyboard Duration
                         </label>
-                        <p className="text-xs text-slate-500 mb-4">How long each panel stays on screen during playback.</p>
+                        <p className="text-xs text-slate-500 mb-4">How long each storyboard stays on screen during playback.</p>
 
                         <div className="bg-slate-950 rounded-xl p-4 border border-slate-800">
                             <div className="flex items-center gap-4">
@@ -73,16 +73,16 @@ const Settings: React.FC<SettingsProps> = ({ settings, user, onUpdateSettings, o
                                     min="1000"
                                     max="10000"
                                     step="500"
-                                    value={settings.panelDelay || 2000}
-                                    onChange={(e) => onUpdateSettings({ ...settings, panelDelay: parseInt(e.target.value) })}
+                                    value={settings.storyboardDelay || 2000}
+                                    onChange={(e) => onUpdateSettings({ ...settings, storyboardDelay: parseInt(e.target.value) })}
                                     className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
-                                    aria-label="Panel duration slider"
+                                    aria-label="Storyboard duration slider"
                                 />
                                 <span className="text-xs text-slate-500 font-mono w-8 text-right">10s</span>
                             </div>
                             <div className="mt-2 text-center">
                                 <span className="text-sm font-bold text-indigo-400">
-                                    {(settings.panelDelay || 2000) / 1000} seconds
+                                    {(settings.storyboardDelay || 2000) / 1000} seconds
                                 </span>
                             </div>
                         </div>

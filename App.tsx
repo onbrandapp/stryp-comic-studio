@@ -28,7 +28,7 @@ import characterVaultTour from './walkthroughs/character_vault.json';
 import characterModalTour from './walkthroughs/character_modal.json';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
-import { Project, Character, ViewState, ComicMode, AVAILABLE_VOICES, Panel, AppSettings } from './types';
+import { Project, Character, ViewState, ComicMode, AVAILABLE_VOICES, Storyboard, AppSettings } from './types';
 import CharacterVault from './components/CharacterVault';
 import LocationVault from './components/LocationVault';
 import Studio from './components/Studio';
@@ -48,7 +48,7 @@ import {
 
 const INITIAL_SETTINGS: AppSettings = {
   defaultNarratorVoiceId: AVAILABLE_VOICES[0].id,
-  panelDelay: 2000 // Default 2 seconds
+  storyboardDelay: 2000 // Default 2 seconds
 };
 
 const App = () => {
@@ -203,7 +203,7 @@ const App = () => {
       summary: newProjectSummary,
       mode: newProjectMode,
       createdAt: Date.now(),
-      panels: [],
+      storyboards: [],
     };
 
     // Optimistic update (though subscription will catch it)
@@ -292,10 +292,10 @@ const App = () => {
     }
   };
 
-  // Handle Full Project Updates (e.g. Adding/Removing Panels)
-  const handleProjectUpdate = (projectId: string, updatedPanels: Panel[]) => {
+  // Handle Full Project Updates (e.g. Adding/Removing Storyboards)
+  const handleProjectUpdate = (projectId: string, updatedStoryboards: Storyboard[]) => {
     setProjects(prev => prev.map(p =>
-      p.id === projectId ? { ...p, panels: updatedPanels } : p
+      p.id === projectId ? { ...p, storyboards: updatedStoryboards } : p
     ));
     triggerDebouncedSave(projectId);
   };
@@ -308,15 +308,15 @@ const App = () => {
     triggerDebouncedSave(projectId);
   };
 
-  // Handle Atomic Panel Updates (e.g. Image/Audio Generation completion)
+  // Handle Atomic Storyboard Updates (e.g. Image/Audio Generation completion)
   // This allows persistent updates even if the child component is unmounting
-  const handlePanelChange = (projectId: string, panelId: string, updates: Partial<Panel>) => {
+  const handleStoryboardChange = (projectId: string, storyboardId: string, updates: Partial<Storyboard>) => {
     setProjects(currentProjects => {
       return currentProjects.map(p => {
         if (p.id !== projectId) return p;
         return {
           ...p,
-          panels: p.panels.map(panel => panel.id === panelId ? { ...panel, ...updates } : panel)
+          storyboards: p.storyboards.map(storyboard => storyboard.id === storyboardId ? { ...storyboard, ...updates } : storyboard)
         };
       });
     });
@@ -438,8 +438,8 @@ const App = () => {
             characters={characters}
             settings={settings}
             user={user}
-            onUpdatePanels={(panels) => handleProjectUpdate(activeProject.id, panels)}
-            onPanelChange={(panelId, updates) => handlePanelChange(activeProject.id, panelId, updates)}
+            onUpdateStoryboards={(storyboards) => handleProjectUpdate(activeProject.id, storyboards)}
+            onStoryboardChange={(storyboardId, updates) => handleStoryboardChange(activeProject.id, storyboardId, updates)}
             onBack={async () => {
               await handleForceSave();
               setView(ViewState.DASHBOARD);
@@ -524,7 +524,7 @@ const App = () => {
                   </p>
                   <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
                     <span className="bg-slate-800 px-2 py-1 rounded">
-                      {project.panels.length} panels
+                      {project.storyboards.length} storyboards
                     </span>
                   </div>
                 </div>

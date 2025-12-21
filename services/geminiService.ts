@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality, GenerateContentResponse, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { Character, Panel, Location } from '../types';
+import { Character, Storyboard, Location } from '../types';
 
 // Helper to wrap promises with a timeout
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
@@ -92,13 +92,13 @@ class GeminiService {
     return new GoogleGenAI({ apiKey });
   }
 
-  // Generate a script (list of panels)
+  // Generate a script (list of storyboards)
   async generateScript(
     sceneDescription: string,
     mood: string,
     characters: Character[],
     existingContext: string
-  ): Promise<Partial<Panel>[]> {
+  ): Promise<Partial<Storyboard>[]> {
 
     const characterContext = characters
       .map(c => `${c.name}: ${c.bio}`)
@@ -244,9 +244,9 @@ class GeminiService {
     }
   }
 
-  // Generate an image for a panel
-  async generatePanelImage(
-    panelDescription: string,
+  // Generate an image for a storyboard
+  async generateStoryboardImage(
+    storyboardDescription: string,
     character?: Character,
     location?: Location
   ): Promise<string> {
@@ -276,7 +276,7 @@ class GeminiService {
 (Subject & Action): 
 Visual Appearance (PRIORITY): ${visualDescription}.
 Character Name: "${character.name}" (Note: Rely on Visual Appearance for species/loops, ignore name bias).
-Action: ${panelDescription}
+Action: ${storyboardDescription}
 
 (Setting): ${locationContext ? locationContext : 'Background matches the mood/action.'}
 IMPORTANT: The background MUST match the Setting description accurately.
@@ -286,7 +286,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
         prompt = `
 (Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
 
-(Scene Description): ${panelDescription}. 
+(Scene Description): ${storyboardDescription}. 
 
 (Setting): ${locationContext ? locationContext : 'Background matches the mood/action.'}
 IMPORTANT: The background MUST match the Setting description accurately.
@@ -301,7 +301,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
         const result = await withTimeout<any>(
           // @ts-ignore
           this.getClient().models.generateContent({
-            model: 'gemini-2.5-flash', // Upgraded to stable 2.5
+            model: 'gemini-2.5-flash-image', // Reverted to specialized image generation model
             contents: [{
               role: 'user',
               parts: [{ text: "Generate an image based on this description:\n\n" + prompt }]
@@ -351,9 +351,9 @@ IMPORTANT: The background MUST match the Setting description accurately.
     }
   }
 
-  // Generate a video for a panel
-  async generatePanelVideo(
-    panelDescription: string,
+  // Generate a video for a storyboard
+  async generateStoryboardVideo(
+    storyboardDescription: string,
     character?: Character,
     location?: Location
   ): Promise<string> {
@@ -371,14 +371,14 @@ IMPORTANT: The background MUST match the Setting description accurately.
         prompt = `
           Cinematic video, Pixar-style animation. 
           Character: ${visualDescription}.
-          Action: ${panelDescription}.
+          Action: ${storyboardDescription}.
           ${locationContext}
           Length: 8 seconds. Include high quality spatial audio.
         `;
       } else {
         prompt = `
           Cinematic video, Pixar-style animation.
-          Action: ${panelDescription}.
+          Action: ${storyboardDescription}.
           ${locationContext}
           Length: 8 seconds. Include high quality spatial audio.
         `;

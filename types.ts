@@ -11,7 +11,7 @@ export interface Character {
   voiceId?: string; // Prebuilt voice name (e.g., 'Puck', 'Kore')
 }
 
-export interface Panel {
+export interface Storyboard {
   id: string;
   description: string; // Scene description used for generation
   dialogue: string;
@@ -30,7 +30,7 @@ export interface Project {
   summary: string; // Context for AI
   mode: ComicMode;
   createdAt: number;
-  panels: Panel[];
+  storyboards: Storyboard[];
   selectedCharacterIds?: string[];
   sceneDescription?: string;
   mood?: string;
@@ -46,7 +46,7 @@ export enum ViewState {
 
 export interface AppSettings {
   defaultNarratorVoiceId: string;
-  panelDelay: number; // Duration in ms
+  storyboardDelay: number; // Duration in ms
 }
 
 export interface LocationMedia {
