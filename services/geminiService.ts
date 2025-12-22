@@ -470,8 +470,18 @@ IMPORTANT: The background MUST match the Setting description accurately.
           throw new Error("Video generation timed out (5 minute limit reached).");
         }
 
-        // @ts-ignore
-        operation = await client.operations.get({ name: operationName });
+        try {
+          // @ts-ignore - Passing string directly to avoid the 'reading name' error
+          operation = await client.operations.get(operationName);
+        } catch (pollError: any) {
+          console.warn("[GeminiService] client.operations.get failed, trying getVideosOperation:", pollError.message);
+          try {
+            // @ts-ignore
+            operation = await client.operations.getVideosOperation({ name: operationName });
+          } catch (vidOpError: any) {
+            throw new Error(`Polling failed: ${vidOpError.message || pollError.message}`);
+          }
+        }
 
         if (operation.done) {
           console.log("[GeminiService] Video generation operation complete.");
@@ -516,9 +526,15 @@ IMPORTANT: The background MUST match the Setting description accurately.
 
     } catch (error: any) {
       console.error("Storyboard video generation failed:", error);
-      // Ensure we pass a clear error message up
-      const msg = error.message || String(error);
-      throw new Error(msg);
+
+      const errorMessage = error.message || String(error);
+
+      // Specialize 429 Quota error for better user feedback
+      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.toLowerCase().includes("quota")) {
+        throw new Error("VIDEO QUOTA EXCEEDED: Veo 3.1 video generation is highly limited. Please check your Google AI Studio quota or try a smaller project. You may need to enable billing if you are on a free tier.");
+      }
+
+      throw new Error(errorMessage);
     }
   }
 
