@@ -458,6 +458,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
         throw new Error(`Video generation started but no operation name was returned. Keys: ${Object.keys(generationOp).join(', ')}`);
       }
       console.log(`[GeminiService] Video generation started. Operation: ${operationName}`);
+      console.log(`[GeminiService] Full generationOp:`, JSON.stringify(generationOp, null, 2));
 
       // 2. POLL FOR COMPLETION
       let operation;
@@ -473,11 +474,13 @@ IMPORTANT: The background MUST match the Setting description accurately.
         try {
           // @ts-ignore - Passing string directly to avoid the 'reading name' error
           operation = await client.operations.get(operationName);
+          console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
         } catch (pollError: any) {
           console.warn("[GeminiService] client.operations.get failed, trying getVideosOperation:", pollError.message);
           try {
             // @ts-ignore
             operation = await client.operations.getVideosOperation({ name: operationName });
+            console.log(`[GeminiService] getVideosOperation status: ${operation.done ? 'DONE' : 'PENDING'}`);
           } catch (vidOpError: any) {
             throw new Error(`Polling failed: ${vidOpError.message || pollError.message}`);
           }
@@ -494,6 +497,7 @@ IMPORTANT: The background MUST match the Setting description accurately.
 
       // 3. HANDLE RESPONSE
       if (operation.error) {
+        console.error("[GeminiService] Video operation error:", operation.error);
         throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
       }
 
@@ -503,17 +507,23 @@ IMPORTANT: The background MUST match the Setting description accurately.
         throw new Error("Video generation completed but returned an empty response.");
       }
 
-      // Handle the case where the response might be nested or have different keys
-      // candidates is common for generateContent, but generateVideos might use videoCandidates or result
+      // Log the full response for debugging
+      console.log("[GeminiService] Video operation response keys:", Object.keys(response));
+      if (response.video) console.log("[GeminiService] response.video keys:", Object.keys(response.video));
+
       const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0] || response;
       const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/')) ||
-        videoCandidate?.inlineData;
+        videoCandidate?.inlineData ||
+        (videoCandidate?.video ? videoCandidate.video : null);
 
       if (videoPart && videoPart.inlineData) {
         return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
       } else if (videoCandidate?.data && videoCandidate?.mimeType) {
         // Direct inlineData structure
         return `data:${videoCandidate.mimeType};base64,${videoCandidate.data}`;
+      } else if (response.video?.data && response.video?.mimeType) {
+        // Nested video data
+        return `data:${response.video.mimeType};base64,${response.video.data}`;
       }
 
       // Fallback: Check if it's in a different property

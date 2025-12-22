@@ -130,7 +130,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
     } else {
       setEditSelectedCharacterIds(new Set(characters.map(c => c.id)));
     }
-    setEditActiveLocationId(activeLocationId);
+    setEditActiveLocationId(project.activeLocationId || '');
     setShowEditProjectModal(true);
   };
 
@@ -207,17 +207,14 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
           summary: editProjectSummary,
           sceneDescription: editSceneDesc,
           mood: editMood,
-          selectedCharacterIds: Array.from(editSelectedCharacterIds)
+          selectedCharacterIds: Array.from(editSelectedCharacterIds),
+          activeLocationId: editActiveLocationId
         });
       } else if (onUpdateProjectDetails) {
         onUpdateProjectDetails(editProjectTitle, editProjectSummary);
       }
 
       setShowEditProjectModal(false);
-
-      if (shouldGenerate) {
-        handleGenerateScript();
-      }
     } catch (error) {
       console.error("Failed to update project", error);
       alert("Failed to save project changes");
@@ -900,128 +897,152 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
   const renderSidebarTools = () => (
     <div className="flex flex-col gap-4 h-full">
       <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-sm shrink-0">
-        <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
-          <div className="flex items-center gap-2 mb-3">
-            {project.mode === 'video' ? <Film className="text-cyan-400" size={16} /> : <Wand2 className="text-indigo-400" size={16} />}
-            <h3 className="text-sm font-bold text-white">AI {project.mode === 'video' ? 'Video' : 'Script'} Gen</h3>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Scene Description</label>
-              <textarea
-                value={sceneDesc}
-                onChange={(e) => setSceneDesc(e.target.value)}
-                placeholder="Describe the scene..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white h-20 resize-none focus:border-indigo-500 outline-none"
-                readOnly
-                title="Use the Edit Project (pencil icon) to change this."
-              />
+        {storyboards.length === 0 ? (
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+            <div className="flex items-center gap-2 mb-3">
+              {project.mode === 'video' ? <Film className="text-cyan-400" size={16} /> : <Wand2 className="text-indigo-400" size={16} />}
+              <h3 className="text-sm font-bold text-white">AI {project.mode === 'video' ? 'Video' : 'Script'} Gen</h3>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Mood / Tone</label>
-              <input
-                type="text"
-                value={mood}
-                onChange={(e) => setMood(e.target.value)}
-                placeholder="e.g. Dark, Suspenseful"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none"
-                readOnly
-                title="Use the Edit Project (pencil icon) to change this."
-              />
-            </div>
-
-            {/* Location Selector */}
-            <div>
-              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2">
-                <MapPin size={12} /> Active Location Concept
-              </label>
-              <button
-                onClick={() => setShowLocationPicker(true)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white text-left flex items-center justify-between hover:border-indigo-500 transition-colors"
-              >
-                <span className="truncate">
-                  {activeLocationId ? locations.find(l => l.id === activeLocationId)?.name || 'Unknown Location' : 'None (Use Scene Desc only)'}
-                </span>
-                <ChevronDown size={14} className="text-slate-500" />
-              </button>
-            </div>
-
-            {/* Location Picker Drawer */}
-            {showLocationPicker && (
-              <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                <div
-                  className="absolute inset-0 sm:hidden"
-                  onClick={() => setShowLocationPicker(false)}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Scene Description</label>
+                <textarea
+                  value={sceneDesc}
+                  onChange={(e) => setSceneDesc(e.target.value)}
+                  placeholder="Describe the scene..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white h-20 resize-none focus:border-indigo-500 outline-none"
+                  readOnly
+                  title="Use the Edit Project (pencil icon) to change this."
                 />
-                <div className="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-slide-up">
-                  <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-t-2xl">
-                    <h3 className="font-bold text-white flex items-center gap-2">
-                      <MapPin size={16} className="text-indigo-400" /> Select Location
-                    </h3>
-                    <button onClick={() => setShowLocationPicker(false)} className="p-1 hover:bg-slate-800 rounded-full text-slate-400">
-                      <X size={20} />
-                    </button>
-                  </div>
+              </div>
 
-                  <div className="p-2 overflow-y-auto custom-scrollbar space-y-2">
-                    <button
-                      onClick={() => { setActiveLocationId(''); setShowLocationPicker(false); }}
-                      className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all ${!activeLocationId ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
-                    >
-                      <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center text-slate-500 border border-slate-800">
-                        <MapPin size={20} />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-bold text-sm text-white">None</p>
-                        <p className="text-xs text-slate-500">Use scene description only</p>
-                      </div>
-                      {!activeLocationId && <div className="ml-auto text-indigo-400"><Check size={16} /></div>}
-                    </button>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Mood / Tone</label>
+                <input
+                  type="text"
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  placeholder="e.g. Dark, Suspenseful"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none"
+                  readOnly
+                  title="Use the Edit Project (pencil icon) to change this."
+                />
+              </div>
 
-                    {locations.map(loc => {
-                      const isActive = activeLocationId === loc.id;
-                      const mediaUrl = (loc.media && loc.media.length > 0) ? loc.media[0].url : loc.mediaUrl;
+              {/* Location Selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2">
+                  <MapPin size={12} /> Active Location Concept
+                </label>
+                <button
+                  onClick={() => setShowLocationPicker(true)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white text-left flex items-center justify-between hover:border-indigo-500 transition-colors"
+                >
+                  <span className="truncate">
+                    {activeLocationId ? locations.find(l => l.id === activeLocationId)?.name || 'Unknown Location' : 'None (Use Scene Desc only)'}
+                  </span>
+                  <ChevronDown size={14} className="text-slate-500" />
+                </button>
+              </div>
 
-                      return (
-                        <button
-                          key={loc.id}
-                          onClick={() => { setActiveLocationId(loc.id); setShowLocationPicker(false); }}
-                          className={`w-full p-2 rounded-xl flex items-center gap-3 transition-all ${isActive ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-black overflow-hidden border border-slate-800 shrink-0">
-                            {mediaUrl ? (
-                              <img src={mediaUrl} alt={loc.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-slate-700">
-                                <ImageIcon size={16} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-left min-w-0 flex-1">
-                            <p className="font-bold text-sm text-white truncate">{loc.name}</p>
-                            <p className="text-xs text-slate-500 truncate">{loc.description || "No description"}</p>
-                          </div>
-                          {isActive && <div className="ml-auto text-indigo-400 shrink-0"><Check size={16} /></div>}
-                        </button>
-                      );
-                    })}
+              {/* Location Picker Drawer */}
+              {showLocationPicker && (
+                <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                  <div
+                    className="absolute inset-0 sm:hidden"
+                    onClick={() => setShowLocationPicker(false)}
+                  />
+                  <div className="bg-slate-900 border-t sm:border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-slide-up">
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-t-2xl">
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                        <MapPin size={16} className="text-indigo-400" /> Select Location
+                      </h3>
+                      <button onClick={() => setShowLocationPicker(false)} className="p-1 hover:bg-slate-800 rounded-full text-slate-400">
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="p-2 overflow-y-auto custom-scrollbar space-y-2">
+                      <button
+                        onClick={() => { setActiveLocationId(''); setShowLocationPicker(false); }}
+                        className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all ${!activeLocationId ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
+                      >
+                        <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center text-slate-500 border border-slate-800">
+                          <MapPin size={20} />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold text-sm text-white">None</p>
+                          <p className="text-xs text-slate-500">Use scene description only</p>
+                        </div>
+                        {!activeLocationId && <div className="ml-auto text-indigo-400"><Check size={16} /></div>}
+                      </button>
+
+                      {locations.map(loc => {
+                        const isActive = activeLocationId === loc.id;
+                        const mediaUrl = (loc.media && loc.media.length > 0) ? loc.media[0].url : loc.mediaUrl;
+
+                        return (
+                          <button
+                            key={loc.id}
+                            onClick={() => { setActiveLocationId(loc.id); setShowLocationPicker(false); }}
+                            className={`w-full p-2 rounded-xl flex items-center gap-3 transition-all ${isActive ? 'bg-indigo-600/20 border border-indigo-500/50' : 'bg-slate-950 border border-slate-800 hover:border-slate-700'}`}
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-black overflow-hidden border border-slate-800 shrink-0">
+                              {mediaUrl ? (
+                                <img src={mediaUrl} alt={loc.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                  <ImageIcon size={16} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-left min-w-0 flex-1">
+                              <p className="font-bold text-sm text-white truncate">{loc.name}</p>
+                              <p className="text-xs text-slate-500 truncate">{loc.description || "No description"}</p>
+                            </div>
+                            {isActive && <div className="ml-auto text-indigo-400 shrink-0"><Check size={16} /></div>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <button
-              onClick={handleGenerateScript}
-              disabled={isGeneratingScript || !sceneDesc}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors border border-slate-700"
-            >
-              {isGeneratingScript ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-              Generate Storyboards
-            </button>
+              <button
+                onClick={handleGenerateScript}
+                disabled={isGeneratingScript || !sceneDesc}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors border border-slate-700"
+              >
+                {isGeneratingScript ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+                Generate Storyboards
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+            <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Storyboard Tools</h3>
+            <button
+              onClick={() => {
+                const newStoryboard: Storyboard = {
+                  id: Date.now().toString(),
+                  description: '',
+                  dialogue: '',
+                  isGeneratingImage: false,
+                  isGeneratingVideo: false,
+                  isGeneratingAudio: false,
+                };
+                updateLocalStoryboards([...storyboards, newStoryboard]);
+              }}
+              className="w-full py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors border border-indigo-500/30"
+            >
+              <Plus size={16} />
+              Add Blank Storyboard
+            </button>
+            <p className="text-[10px] text-slate-600 mt-2 text-center">Script generated. Add more panels manually.</p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
@@ -1584,20 +1605,14 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                 </div>
 
                 <div className="flex flex-col gap-3 mt-6 pt-4 border-t border-slate-800">
-                  {/* Mobile-only Generate Button */}
+                  {/* Mobile-only Save Button (Simplified) */}
                   <button
-                    onClick={() => {
-                      handleUpdateProject();
-                      // Small delay to allow state update before generation
-                      setTimeout(() => {
-                        handleGenerateScript();
-                      }, 100);
-                    }}
-                    disabled={isUpdatingProject || isGeneratingScript || !editSceneDesc}
+                    onClick={handleUpdateProject}
+                    disabled={isUpdatingProject || !editProjectTitle.trim()}
                     className="md:hidden w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isGeneratingScript ? <Loader2 className="animate-spin" size={20} /> : <Wand2 size={20} />}
-                    Save & Generate Storyboards
+                    {isUpdatingProject ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                    Save Changes
                   </button>
 
                   <div className="flex justify-end gap-3">
