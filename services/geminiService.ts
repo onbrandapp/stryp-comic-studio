@@ -438,40 +438,67 @@ IMPORTANT: The background MUST match the Setting description accurately.
 
       console.log("Generating video with prompt:", prompt);
 
-      const result = await withTimeout<any>(
+      const client = this.getClient();
+
+      // 1. START ASYNC GENERATION
+      // @ts-ignore - generateVideos is a newer method in the SDK
+      const generationOp = await client.models.generateVideos({
+        model: 'veo-3.1-generate-preview',
+        prompt: prompt
+      });
+
+      const operationName = generationOp.name;
+      console.log(`[GeminiService] Video generation started. Operation: ${operationName}`);
+
+      // 2. POLL FOR COMPLETION
+      let operation;
+      const startTime = Date.now();
+      const MAX_POLL_TIME = 300000; // 5 minutes limit
+      const POLL_INTERVAL = 5000; // 5 seconds between checks
+
+      while (true) {
+        if (Date.now() - startTime > MAX_POLL_TIME) {
+          throw new Error("Video generation timed out (5 minute limit reached).");
+        }
+
         // @ts-ignore
-        this.getClient().models.generateContent({
-          model: 'veo-3.1-generate-001', // Using the stable Veo 3.1 model
-          contents: [{
-            role: 'user',
-            parts: [{ text: prompt }]
-          }],
-          config: {
-            // Video specific configuration if needed in the future
-          }
-        }),
-        180000, // 3 minute timeout for video generation
-        "Video generation timed out"
-      );
+        operation = await client.operations.get({ name: operationName });
 
-      const response = result.response || result;
-      const candidates = response.candidates;
+        if (operation.done) {
+          console.log("[GeminiService] Video generation operation complete.");
+          break;
+        }
 
-      if (!candidates || candidates.length === 0) {
-        throw new Error("No candidates returned for video");
+        console.log(`[GeminiService] Polling video operation: ${operationName}...`);
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
 
-      const parts = candidates[0].content?.parts;
-      const videoPart = parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/'));
+      // 3. HANDLE RESPONSE
+      if (operation.error) {
+        throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
+      }
+
+      const response = operation.response;
+      // The response for generateVideos usually contains an array of videos/candidates
+      // Based on typical Gemini API patterns for multi-modal generation
+      const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0];
+      const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/'));
 
       if (videoPart && videoPart.inlineData) {
         return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
       }
 
-      throw new Error("No video generated in response.");
+      // Fallback: Check if it's in a different property
+      if (response.video?.uri || response.uri) {
+        // If it returns a URI from a different storage, but here we expect inlineData for the Studio to handle it
+        throw new Error("Video generated but returned as URI which is not yet supported in this flow.");
+      }
+
+      console.error("[GeminiService] Video response structure unknown:", JSON.stringify(response, null, 2));
+      throw new Error("No video data found in the generation response.");
 
     } catch (error) {
-      console.error("Panel video generation failed:", error);
+      console.error("Storyboard video generation failed:", error);
       throw error;
     }
   }
