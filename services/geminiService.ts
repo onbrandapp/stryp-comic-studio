@@ -441,13 +441,22 @@ IMPORTANT: The background MUST match the Setting description accurately.
       const client = this.getClient();
 
       // 1. START ASYNC GENERATION
-      // @ts-ignore - generateVideos is a newer method in the SDK
       const generationOp = await client.models.generateVideos({
         model: 'veo-3.1-generate-preview',
         prompt: prompt
       });
 
+      console.log("[GeminiService] generationOp raw:", generationOp);
+
+      if (!generationOp) {
+        throw new Error("Video generation request returned no data (undefined). Check your API key and permissions.");
+      }
+
       const operationName = generationOp.name;
+      if (!operationName) {
+        console.error("[GeminiService] generationOp keys:", Object.keys(generationOp));
+        throw new Error(`Video generation started but no operation name was returned. Keys: ${Object.keys(generationOp).join(', ')}`);
+      }
       console.log(`[GeminiService] Video generation started. Operation: ${operationName}`);
 
       // 2. POLL FOR COMPLETION
@@ -479,27 +488,37 @@ IMPORTANT: The background MUST match the Setting description accurately.
       }
 
       const response = operation.response;
-      // The response for generateVideos usually contains an array of videos/candidates
-      // Based on typical Gemini API patterns for multi-modal generation
-      const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0];
-      const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/'));
+      if (!response) {
+        console.error("[GeminiService] Operation done but no response:", JSON.stringify(operation, null, 2));
+        throw new Error("Video generation completed but returned an empty response.");
+      }
+
+      // Handle the case where the response might be nested or have different keys
+      // candidates is common for generateContent, but generateVideos might use videoCandidates or result
+      const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0] || response;
+      const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/')) ||
+        videoCandidate?.inlineData;
 
       if (videoPart && videoPart.inlineData) {
         return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
+      } else if (videoCandidate?.data && videoCandidate?.mimeType) {
+        // Direct inlineData structure
+        return `data:${videoCandidate.mimeType};base64,${videoCandidate.data}`;
       }
 
       // Fallback: Check if it's in a different property
       if (response.video?.uri || response.uri) {
-        // If it returns a URI from a different storage, but here we expect inlineData for the Studio to handle it
-        throw new Error("Video generated but returned as URI which is not yet supported in this flow.");
+        throw new Error("Video generated but returned as URI which is not yet supported in this flow. Please ensure your API key supports inline data returns.");
       }
 
       console.error("[GeminiService] Video response structure unknown:", JSON.stringify(response, null, 2));
-      throw new Error("No video data found in the generation response.");
+      throw new Error("No video data found in the generation response. Please check the console for structure details.");
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Storyboard video generation failed:", error);
-      throw error;
+      // Ensure we pass a clear error message up
+      const msg = error.message || String(error);
+      throw new Error(msg);
     }
   }
 
