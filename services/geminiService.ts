@@ -449,9 +449,18 @@ IMPORTANT: The background MUST match the Setting description accurately.
         20000,
         "Audio generation timed out"
       );
+      console.log("[GeminiService] Audio response received:", JSON.stringify(response, (key, value) =>
+        key === 'data' ? `${value.substring(0, 50)}... [length: ${value.length}]` : value, 2));
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) throw new Error("No audio generated");
+      const part = response.candidates?.[0]?.content?.parts?.[0];
+      const base64Audio = part?.inlineData?.data;
+
+      if (!base64Audio) {
+        console.error("[GeminiService] No audio data in response. Part:", part);
+        throw new Error("No audio generated. Check AI safety settings or dialogue content.");
+      }
+
+      console.log("[GeminiService] Audio data success. Length:", base64Audio.length, "Prefix:", base64Audio.substring(0, 20));
 
       return `data:audio/mpeg;base64,${base64Audio}`;
 
