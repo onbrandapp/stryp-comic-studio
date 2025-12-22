@@ -253,17 +253,14 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
       currentAudioRef.current = null;
     };
 
-    audio.onerror = (e) => {
-      console.error("[Studio] Audio Error Event:", e);
+    audio.onerror = () => {
       const error = audio.error;
       let message = "Failed to play audio.";
       if (error) {
-        console.error("[Studio] Audio Error Code:", error.code);
-        console.error("[Studio] Audio Error Message:", error.message || "No error message provided by browser");
         if (error.code === 1) message = "Playback aborted.";
         if (error.code === 2) message = "Network error during playback.";
-        if (error.code === 3) message = "Audio decoding failed (Format issue?).";
-        if (error.code === 4) message = "Audio source not supported (MIME type mismatch?).";
+        if (error.code === 3) message = "Audio decoding failed (Format issue).";
+        if (error.code === 4) message = "Audio source not supported.";
       }
       setPlayingStoryboardId(null);
       currentAudioRef.current = null;
@@ -528,7 +525,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
         if (isVideoMode) {
           await handleGenerateVideo(storyboard.id);
         } else {
-          handleGenerateImage(storyboard.id);
+          await handleGenerateImage(storyboard.id);
         }
         // Stagger requests
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -862,12 +859,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
             currentAudioRef.current = null;
             resolve();
           };
-          audio.onerror = (e) => {
-            console.error("[Studio Preview] Audio Error Event:", e);
-            const error = audio.error;
-            if (error) {
-              console.error("[Studio Preview] Error Code:", error.code, "Message:", error.message || "No message");
-            }
+          audio.onerror = () => {
             currentAudioRef.current = null;
             resolve();
           };
@@ -1645,6 +1637,7 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
                 src={storyboards[activePreviewIndex].videoUrl}
                 className="max-w-full max-h-full object-contain animate-fade-in transition-opacity duration-500"
                 autoPlay
+                loop
                 playsInline
                 controls={false}
               />

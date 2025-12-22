@@ -417,18 +417,22 @@ IMPORTANT: The background MUST match the Setting description accurately.
       if (character) {
         visualDescription = await this.getCharacterVisualDescription(character);
         prompt = `
-          Cinematic video, Pixar-style animation. 
+          High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
+          Style: Vibrant colors, professional lighting, expressive character animation.
           Character: ${visualDescription}.
           Action: ${storyboardDescription}.
           ${locationContext}
-          Length: 8 seconds. Include high quality spatial audio.
+          Motion: Dynamic but smooth camera work.
+          Duration: 8 seconds. High-fidelity spatial audio.
         `;
       } else {
         prompt = `
-          Cinematic video, Pixar-style animation.
+          High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
+          Style: Vibrant colors, professional lighting.
           Action: ${storyboardDescription}.
           ${locationContext}
-          Length: 8 seconds. Include high quality spatial audio.
+          Motion: Smooth cinematic pans.
+          Duration: 8 seconds. High-fidelity spatial audio.
         `;
       }
 
@@ -497,22 +501,15 @@ IMPORTANT: The background MUST match the Setting description accurately.
         20000,
         "Audio generation timed out"
       );
-      console.log("[GeminiService] Audio response received:", JSON.stringify(response, (key, value) =>
-        key === 'data' ? `${value.substring(0, 50)}... [length: ${value.length}]` : value, 2));
-
       const part = response.candidates?.[0]?.content?.parts?.[0];
       const base64Audio = part?.inlineData?.data;
 
       if (!base64Audio) {
-        console.error("[GeminiService] No audio data in response. Part:", part);
         throw new Error("No audio generated. Check AI safety settings or dialogue content.");
       }
 
-      console.log("[GeminiService] Audio data success. Raw Length:", base64Audio.length);
-
       // WRAP RAW PCM IN WAV HEADER
       const wavBase64 = addWavHeader(base64Audio, 24000);
-      console.log("[GeminiService] WAV Wrap complete. New Length:", wavBase64.length);
 
       return `data:audio/wav;base64,${wavBase64}`;
 
