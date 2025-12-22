@@ -548,12 +548,16 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
       const base64Audio = await gemini.generateSpeech(storyboard.dialogue, voiceId);
 
-      // OPTIMISTIC UPDATE
+      // OPTIMISTIC UPDATE: Set local data URI immediately so it can be played without CORS waiting
+      setStoryboards(prev => prev.map(p =>
+        p.id === storyboardId ? { ...p, audioUrl: base64Audio } : p
+      ));
+
       setStoryboardStates(prev => ({ ...prev, [storyboardId]: 'Saving Audio...' }));
 
       const storageAudioUrl = await uploadStoryboardAudio(user.uid, base64Audio);
 
-      // ATOMIC UPDATE
+      // ATOMIC UPDATE: Replace with long-term cloud URL
       onStoryboardChange(storyboardId, { audioUrl: storageAudioUrl });
 
       setStoryboards(prev => prev.map(p =>

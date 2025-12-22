@@ -439,13 +439,14 @@ IMPORTANT: The background MUST match the Setting description accurately.
                 prebuiltVoiceConfig: { voiceName }
               }
             },
-            // @ts-ignore - audioConfig is supported by the API but might be missing from older type definitions
-            audioConfig: {
-              audioEncoding: 'MP3'
+            // Unified SDK prefers snake_case for many parameters
+            // @ts-ignore
+            audio_config: {
+              audio_encoding: 'MP3'
             }
           }
         }),
-        20000, // 20s timeout for audio
+        20000,
         "Audio generation timed out"
       );
 
