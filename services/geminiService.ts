@@ -1,6 +1,54 @@
-
 import { GoogleGenAI, Type, Modality, GenerateContentResponse, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Character, Storyboard, Location } from '../types';
+
+/**
+ * Helper to add a RIFF/WAV header to raw PCM data (16-bit, 24kHz, Mono)
+ * This allows raw data from Gemini to play in standard browser <audio> elements.
+ */
+function addWavHeader(base64Pcm: string, sampleRate: number = 24000): string {
+  const binaryString = atob(base64Pcm);
+  const dataLen = binaryString.length;
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataLen, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // Byte rate (SampleRate * 2)
+  view.setUint16(32, 2, true); // Block align (1 channel * 2 bytes)
+  view.setUint16(34, 16, true); // Bits per sample
+  writeString(36, 'data');
+  view.setUint32(40, dataLen, true);
+
+  const headerUint8 = new Uint8Array(header);
+  const dataUint8Array = new Uint8Array(dataLen);
+  for (let i = 0; i < dataLen; i++) {
+    dataUint8Array[i] = binaryString.charCodeAt(i);
+  }
+
+  const combined = new Uint8Array(44 + dataLen);
+  combined.set(headerUint8, 0);
+  combined.set(dataUint8Array, 44);
+
+  // Convert back to base64 efficiently
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < combined.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, combined.subarray(i, i + chunkSize) as any);
+  }
+  return btoa(binary);
+}
 
 // Helper to wrap promises with a timeout
 function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
@@ -460,9 +508,13 @@ IMPORTANT: The background MUST match the Setting description accurately.
         throw new Error("No audio generated. Check AI safety settings or dialogue content.");
       }
 
-      console.log("[GeminiService] Audio data success. Length:", base64Audio.length, "Prefix:", base64Audio.substring(0, 20));
+      console.log("[GeminiService] Audio data success. Raw Length:", base64Audio.length);
 
-      return `data:audio/mpeg;base64,${base64Audio}`;
+      // WRAP RAW PCM IN WAV HEADER
+      const wavBase64 = addWavHeader(base64Audio, 24000);
+      console.log("[GeminiService] WAV Wrap complete. New Length:", wavBase64.length);
+
+      return `data:audio/wav;base64,${wavBase64}`;
 
     } catch (error: any) {
       console.error("Speech generation failed:", error);
