@@ -523,16 +523,36 @@ IMPORTANT: The background MUST match the Setting description accurately.
         throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
       }
 
-      const response = operation.response;
+      const response = operation.response || operation.result;
       if (!response) {
         console.error("[GeminiService] Operation done but no response:", JSON.stringify(operation, null, 2));
         throw new Error("Video generation completed but returned an empty response.");
       }
 
-      // Log the full response for debugging
+      // 4. EXTRACT VIDEO DATA OR URI
       console.log("[GeminiService] Video operation response keys:", Object.keys(response));
-      if (response.video) console.log("[GeminiService] response.video keys:", Object.keys(response.video));
 
+      // Look for the URI in the new structure seen in logs
+      const samples = response.generateVideoResponse?.generatedSamples || response.generatedSamples;
+      const videoUri = samples?.[0]?.video?.uri || response.video?.uri || response.uri;
+
+      if (videoUri) {
+        console.log(`[GeminiService] Video generated at URI: ${videoUri}. Fetching data...`);
+        // Append API key if it's a Google API URL and key isn't already there
+        const fetchUrl = videoUri.includes('generativelanguage.googleapis.com') && !videoUri.includes('key=')
+          ? `${videoUri}${videoUri.includes('?') ? '&' : '?'}key=${apiKey}`
+          : videoUri;
+
+        try {
+          const media = await fetchMediaAsBase64(fetchUrl);
+          return `data:${media.mimeType};base64,${media.data}`;
+        } catch (fetchErr: any) {
+          console.error("[GeminiService] Failed to fetch video from URI:", fetchErr.message);
+          throw new Error("Video was generated but could not be downloaded. Check console for details.");
+        }
+      }
+
+      // Fallback to inline data checks (old SDK behavior)
       const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0] || response;
       const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/')) ||
         videoCandidate?.inlineData ||
@@ -541,20 +561,13 @@ IMPORTANT: The background MUST match the Setting description accurately.
       if (videoPart && videoPart.inlineData) {
         return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
       } else if (videoCandidate?.data && videoCandidate?.mimeType) {
-        // Direct inlineData structure
         return `data:${videoCandidate.mimeType};base64,${videoCandidate.data}`;
       } else if (response.video?.data && response.video?.mimeType) {
-        // Nested video data
         return `data:${response.video.mimeType};base64,${response.video.data}`;
       }
 
-      // Fallback: Check if it's in a different property
-      if (response.video?.uri || response.uri) {
-        throw new Error("Video generated but returned as URI which is not yet supported in this flow. Please ensure your API key supports inline data returns.");
-      }
-
       console.error("[GeminiService] Video response structure unknown:", JSON.stringify(response, null, 2));
-      throw new Error("No video data found in the generation response. Please check the console for structure details.");
+      throw new Error("No video data or URI found in the generation response.");
 
     } catch (error: any) {
       console.error("Storyboard video generation failed:", error);
