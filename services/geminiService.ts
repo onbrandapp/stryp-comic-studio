@@ -461,38 +461,66 @@ IMPORTANT: The background MUST match the Setting description accurately.
       console.log(`[GeminiService] Full generationOp:`, JSON.stringify(generationOp, null, 2));
 
       // 2. POLL FOR COMPLETION
-      let operation;
+      let operation: any;
       const startTime = Date.now();
-      const MAX_POLL_TIME = 300000; // 5 minutes limit
-      const POLL_INTERVAL = 5000; // 5 seconds between checks
+      const MAX_POLL_TIME = 420000; // 7 minutes limit (videos take time)
+      const POLL_INTERVAL = 10000; // 10 seconds between checks
 
-      while (true) {
-        if (Date.now() - startTime > MAX_POLL_TIME) {
-          throw new Error("Video generation timed out (5 minute limit reached).");
-        }
-
+      // OPTION A: If the SDK provides a wait() method, use it!
+      // Many modern Google SDKs return an operation-like object with .wait()
+      if (typeof (generationOp as any).wait === 'function') {
+        console.log("[GeminiService] Using generationOp.wait()...");
         try {
-          // @ts-ignore - Passing string directly to avoid the 'reading name' error
-          operation = await client.operations.get(operationName);
-          console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-        } catch (pollError: any) {
-          console.warn("[GeminiService] client.operations.get failed, trying getVideosOperation:", pollError.message);
-          try {
-            // @ts-ignore
-            operation = await client.operations.getVideosOperation({ name: operationName });
-            console.log(`[GeminiService] getVideosOperation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-          } catch (vidOpError: any) {
-            throw new Error(`Polling failed: ${vidOpError.message || pollError.message}`);
+          operation = await (generationOp as any).wait();
+        } catch (waitError: any) {
+          console.error("[GeminiService] operation.wait() failed:", waitError.message);
+          // Fall through to manual polling if wait() fails
+        }
+      }
+
+      // OPTION B: Manual Polling loop (Fallback or Primary)
+      if (!operation || !operation.done) {
+        console.log("[GeminiService] Starting manual polling loop...");
+        while (true) {
+          if (Date.now() - startTime > MAX_POLL_TIME) {
+            throw new Error("Video generation timed out (7 minute limit reached).");
           }
-        }
 
-        if (operation.done) {
-          console.log("[GeminiService] Video generation operation complete.");
-          break;
-        }
+          try {
+            // The unified SDK operations.get expects { name: string }
+            operation = await client.operations.get({ name: operationName });
+            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
+          } catch (pollError: any) {
+            console.warn("[GeminiService] client.operations.get failed:", pollError.message);
 
-        console.log(`[GeminiService] Polling video operation: ${operationName}...`);
-        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+            // SECOND FALLBACK: Try passing string directly if object fails
+            try {
+              // @ts-ignore
+              operation = await client.operations.get(operationName);
+              console.log(`[GeminiService] client.operations.get (string) status: ${operation.done ? 'DONE' : 'PENDING'}`);
+            } catch (strPollError: any) {
+              // LAST RESORT: Try getVideosOperation if it somehow exists (maybe renamed in some versions)
+              try {
+                // @ts-ignore
+                if (typeof client.operations.getVideosOperation === 'function') {
+                  operation = await (client.operations as any).getVideosOperation({ name: operationName });
+                } else {
+                  throw strPollError;
+                }
+              } catch (finalError: any) {
+                throw new Error(`Polling failed after multiple attempts. Last error: ${finalError.message}`);
+              }
+            }
+          }
+
+          if (operation && operation.done) {
+            console.log("[GeminiService] Video generation operation complete.");
+            break;
+          }
+
+          console.log(`[GeminiService] Polling video operation: ${operationName}... Next check in ${POLL_INTERVAL / 1000}s`);
+          await new Promise(r => setTimeout(r, POLL_INTERVAL));
+        }
       }
 
       // 3. HANDLE RESPONSE
