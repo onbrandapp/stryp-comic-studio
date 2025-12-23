@@ -127,32 +127,36 @@ async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data
 }
 
 
-class GeminiService {
-  private getClient() {
-    // Look for the key in multiple possible locations (Vite prefix and standard)
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
-      import.meta.env.GEMINI_API_KEY ||
-      (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : '') ||
-      (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') ||
-      '';
+  private client: any = null;
 
-    // Using the object format since it was used in the previous working version
-    return new GoogleGenAI({ apiKey });
-  }
+  private getClient() {
+  if (this.client) return this.client;
+
+  // Look for the key in multiple possible locations (Vite prefix and standard)
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.GEMINI_API_KEY ||
+    (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : '') ||
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') ||
+    '';
+
+  // Using the object format since it was used in the previous working version
+  this.client = new GoogleGenAI({ apiKey });
+  return this.client;
+}
 
   // Generate a script (list of storyboards)
   async generateScript(
-    sceneDescription: string,
-    mood: string,
-    characters: Character[],
-    existingContext: string
-  ): Promise<Partial<Storyboard>[]> {
+  sceneDescription: string,
+  mood: string,
+  characters: Character[],
+  existingContext: string
+): Promise < Partial < Storyboard > [] > {
 
-    const characterContext = characters
-      .map(c => `${c.name}: ${c.bio}`)
-      .join('\n');
+  const characterContext = characters
+    .map(c => `${c.name}: ${c.bio}`)
+    .join('\n');
 
-    const prompt = `
+  const prompt = `
       Create a comic strip script.
       Context: ${existingContext}
       Scene Description: ${sceneDescription}
@@ -166,64 +170,64 @@ class GeminiService {
       - "characterName": The name of the character speaking (if any).
     `;
 
-    try {
-      const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                description: { type: Type.STRING },
-                dialogue: { type: Type.STRING },
-                characterName: { type: Type.STRING },
-              },
-              required: ['description', 'dialogue']
-            }
+  try {
+    const response = await this.getClient().models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              description: { type: Type.STRING },
+              dialogue: { type: Type.STRING },
+              characterName: { type: Type.STRING },
+            },
+            required: ['description', 'dialogue']
           }
         }
-      });
+      }
+    });
 
-      const data = JSON.parse(response.text || '[]');
+    const data = JSON.parse(response.text || '[]');
 
-      return data.map((item: any) => {
-        const char = characters.find(c => c.name.toLowerCase() === item.characterName?.toLowerCase());
-        return {
-          description: item.description,
-          dialogue: item.dialogue,
-          characterId: char ? char.id : undefined,
-        };
-      });
+    return data.map((item: any) => {
+      const char = characters.find(c => c.name.toLowerCase() === item.characterName?.toLowerCase());
+      return {
+        description: item.description,
+        dialogue: item.dialogue,
+        characterId: char ? char.id : undefined,
+      };
+    });
 
-    } catch (error) {
-      console.error("Script generation failed:", error);
-      throw error;
+  } catch(error) {
+    console.error("Script generation failed:", error);
+    throw error;
+  }
+}
+
+  // Helper to get a visual description from a Location (Images or Videos)
+  async getLocationVisualDescription(mediaItems: { url: string, type: 'image' | 'video' }[]): Promise < string > {
+  if(!mediaItems || mediaItems.length === 0) return '';
+
+try {
+  const parts: any[] = [];
+
+  // Fetch all media items
+  for (const item of mediaItems) {
+    try {
+      const media = await fetchMediaAsBase64(item.url);
+      parts.push({ inlineData: { mimeType: media.mimeType, data: media.data } });
+    } catch (e) {
+      console.warn("Skipping failed media item:", item.url, e);
     }
   }
 
-  // Helper to get a visual description from a Location (Images or Videos)
-  async getLocationVisualDescription(mediaItems: { url: string, type: 'image' | 'video' }[]): Promise<string> {
-    if (!mediaItems || mediaItems.length === 0) return '';
+  if (parts.length === 0) throw new Error("No media could be loaded");
 
-    try {
-      const parts: any[] = [];
-
-      // Fetch all media items
-      for (const item of mediaItems) {
-        try {
-          const media = await fetchMediaAsBase64(item.url);
-          parts.push({ inlineData: { mimeType: media.mimeType, data: media.data } });
-        } catch (e) {
-          console.warn("Skipping failed media item:", item.url, e);
-        }
-      }
-
-      if (parts.length === 0) throw new Error("No media could be loaded");
-
-      const prompt = `Analyze these ${mediaItems.length} images/videos in detail for use as a background location reference in a comic book generation prompt.
+  const prompt = `Analyze these ${mediaItems.length} images/videos in detail for use as a background location reference in a comic book generation prompt.
       
       These items represent different angles or details of the SAME location. Combine them to create one unified visual description.
       
@@ -237,88 +241,88 @@ class GeminiService {
       Do NOT describe any people or characters in the scene. Focus ONLY on the location/background.
       Keep it descriptive but concise.`;
 
-      parts.push({ text: prompt });
+  parts.push({ text: prompt });
 
-      const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: { parts }
-      });
+  const response = await this.getClient().models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: { parts }
+  });
 
-      return response.text || '';
-    } catch (error) {
-      console.warn("Failed to get location description:", error);
-      throw error;
-    }
+  return response.text || '';
+} catch (error) {
+  console.warn("Failed to get location description:", error);
+  throw error;
+}
   }
 
   // Helper to get a visual description from an image using Gemini Vision
-  async getCharacterVisualDescription(character: Character): Promise<string> {
-    if (!character.imageUrl) return character.bio || '';
+  async getCharacterVisualDescription(character: Character): Promise < string > {
+  if(!character.imageUrl) return character.bio || '';
 
-    try {
-      const parts: any[] = [];
+  try {
+    const parts: any[] = [];
 
-      // Add first image
-      const img1 = await fetchMediaAsBase64(character.imageUrl);
-      parts.push({ inlineData: { mimeType: img1.mimeType, data: img1.data } });
+    // Add first image
+    const img1 = await fetchMediaAsBase64(character.imageUrl);
+    parts.push({ inlineData: { mimeType: img1.mimeType, data: img1.data } });
 
-      // Add second image if it exists
-      if (character.imageUrl2) {
-        try {
-          const img2 = await fetchMediaAsBase64(character.imageUrl2);
-          parts.push({ inlineData: { mimeType: img2.mimeType, data: img2.data } });
-        } catch (e) {
-          console.warn("Failed to fetch second image:", e);
-        }
-      }
+    // Add second image if it exists
+    if(character.imageUrl2) {
+  try {
+    const img2 = await fetchMediaAsBase64(character.imageUrl2);
+    parts.push({ inlineData: { mimeType: img2.mimeType, data: img2.data } });
+  } catch (e) {
+    console.warn("Failed to fetch second image:", e);
+  }
+}
 
-      const prompt = `Describe this character's physical appearance in detail for an image generator prompt. 
+const prompt = `Describe this character's physical appearance in detail for an image generator prompt. 
       Focus on hair, eyes, clothing, facial features, and style. 
       If there are two images, combine the details to create a consistent description.
       Ignore the background. 
       Keep it concise but descriptive.`;
 
-      parts.push({ text: prompt });
+parts.push({ text: prompt });
 
-      const response = await this.getClient().models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: { parts }
-      });
+const response = await this.getClient().models.generateContent({
+  model: 'gemini-2.0-flash',
+  contents: { parts }
+});
 
-      return (response.text || '') + (character.bio ? ` Context: ${character.bio}` : '');
+return (response.text || '') + (character.bio ? ` Context: ${character.bio}` : '');
     } catch (error) {
-      console.warn("Failed to get visual description:", error);
-      return character.bio || '';
-    }
+  console.warn("Failed to get visual description:", error);
+  return character.bio || '';
+}
   }
 
   // Generate an image for a storyboard
   async generateStoryboardImage(
-    storyboardDescription: string,
-    character?: Character,
-    location?: Location
-  ): Promise<string> {
-    try {
-      let prompt = '';
-      let visualDescription = '';
-      let locationContext = '';
+  storyboardDescription: string,
+  character ?: Character,
+  location ?: Location
+): Promise < string > {
+  try {
+    let prompt = '';
+    let visualDescription = '';
+    let locationContext = '';
 
-      // 1. Process Location Context
-      if (location && location.visualDescription) {
-        locationContext = `
+    // 1. Process Location Context
+    if(location && location.visualDescription) {
+  locationContext = `
           SETTING / LOCATION REFERENCE:
           ${location.visualDescription}
           
           Start the scene with this setting. Ensure the background matches this description accurately.
         `;
-      }
+}
 
-      // 2. Get Visual Description if character exists
-      if (character) {
-        // Use the bio as a fallback or base, but try to get a visual description
-        visualDescription = await this.getCharacterVisualDescription(character);
+// 2. Get Visual Description if character exists
+if (character) {
+  // Use the bio as a fallback or base, but try to get a visual description
+  visualDescription = await this.getCharacterVisualDescription(character);
 
-        prompt = `
+  prompt = `
 (Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
 
 (Subject & Action): 
@@ -330,8 +334,8 @@ Action: ${storyboardDescription}
 IMPORTANT: The background MUST match the Setting description accurately.
 
 (Style): 3D Pixar-style animation.`;
-      } else {
-        prompt = `
+} else {
+  prompt = `
 (Technical Specs): 3D render, Pixar-style animation to look like a movie screencap. High quality, 8k resolution, cinematic lighting.
 
 (Scene Description): ${storyboardDescription}. 
@@ -340,83 +344,83 @@ IMPORTANT: The background MUST match the Setting description accurately.
 IMPORTANT: The background MUST match the Setting description accurately.
 
 (Style): 3D Pixar-style animation.`;
+}
+
+console.log("Generating image with prompt:", prompt);
+
+try {
+  // Use proper SDK method for @google/genai
+  const result = await withTimeout<any>(
+    // @ts-ignore
+    this.getClient().models.generateContent({
+      model: 'gemini-2.5-flash-image', // Reverted to specialized image generation model
+      contents: [{
+        role: 'user',
+        parts: [{ text: "Generate an image based on this description:\n\n" + prompt }]
+      }],
+      config: {
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+        ]
       }
+    }),
+    90000,
+    "Image generation timed out"
+  );
 
-      console.log("Generating image with prompt:", prompt);
+  // Result from new SDK might be the response itself or contain it
+  const response = result.response || result;
+  const candidates = response.candidates;
 
-      try {
-        // Use proper SDK method for @google/genai
-        const result = await withTimeout<any>(
-          // @ts-ignore
-          this.getClient().models.generateContent({
-            model: 'gemini-2.5-flash-image', // Reverted to specialized image generation model
-            contents: [{
-              role: 'user',
-              parts: [{ text: "Generate an image based on this description:\n\n" + prompt }]
-            }],
-            config: {
-              safetySettings: [
-                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-              ]
-            }
-          }),
-          90000,
-          "Image generation timed out"
-        );
+  if (!candidates || candidates.length === 0) {
+    throw new Error("No candidates returned");
+  }
 
-        // Result from new SDK might be the response itself or contain it
-        const response = result.response || result;
-        const candidates = response.candidates;
+  // Check for inlineData (image)
+  // Access safely with optional chaining
+  const parts = candidates[0].content?.parts;
+  const imagePart = parts?.find((p: any) => p.inlineData);
 
-        if (!candidates || candidates.length === 0) {
-          throw new Error("No candidates returned");
-        }
+  if (imagePart && imagePart.inlineData) {
+    return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
+  }
 
-        // Check for inlineData (image)
-        // Access safely with optional chaining
-        const parts = candidates[0].content?.parts;
-        const imagePart = parts?.find((p: any) => p.inlineData);
+  throw new Error("No image generated in response. The model may have returned text instead.");
 
-        if (imagePart && imagePart.inlineData) {
-          return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
-        }
-
-        throw new Error("No image generated in response. The model may have returned text instead.");
-
-      } catch (error: any) {
-        console.error("Image generation error:", error);
-        if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota") || error.message?.toLowerCase().includes("limit") || error.message?.includes("RESOURCE_EXHAUSTED")) {
-          throw new Error("Quota exceeded: You have reached your API limit for image generation. Please try again later or check your billing details.");
-        }
-        throw error;
-      }
+} catch (error: any) {
+  console.error("Image generation error:", error);
+  if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota") || error.message?.toLowerCase().includes("limit") || error.message?.includes("RESOURCE_EXHAUSTED")) {
+    throw new Error("Quota exceeded: You have reached your API limit for image generation. Please try again later or check your billing details.");
+  }
+  throw error;
+}
     } catch (error) {
-      console.error("Panel generation process failed:", error);
-      throw error;
-    }
+  console.error("Panel generation process failed:", error);
+  throw error;
+}
   }
 
   // Generate a video for a storyboard
   async generateStoryboardVideo(
-    storyboardDescription: string,
-    character?: Character,
-    location?: Location
-  ): Promise<string> {
-    try {
-      let prompt = '';
-      let visualDescription = '';
-      let locationContext = '';
+  storyboardDescription: string,
+  character ?: Character,
+  location ?: Location
+): Promise < string > {
+  try {
+    let prompt = '';
+    let visualDescription = '';
+    let locationContext = '';
 
-      if (location && location.visualDescription) {
-        locationContext = `SETTING: ${location.visualDescription}`;
-      }
+    if(location && location.visualDescription) {
+  locationContext = `SETTING: ${location.visualDescription}`;
+}
 
-      if (character) {
-        visualDescription = await this.getCharacterVisualDescription(character);
-        prompt = `
+if (character) {
+  visualDescription = await this.getCharacterVisualDescription(character);
+  prompt = `
           High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
           Style: Vibrant colors, professional lighting, expressive character animation.
           Character: ${visualDescription}.
@@ -425,8 +429,8 @@ IMPORTANT: The background MUST match the Setting description accurately.
           Motion: Dynamic but smooth camera work.
           Duration: 8 seconds. High-fidelity spatial audio.
         `;
-      } else {
-        prompt = `
+} else {
+  prompt = `
           High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
           Style: Vibrant colors, professional lighting.
           Action: ${storyboardDescription}.
@@ -434,202 +438,202 @@ IMPORTANT: The background MUST match the Setting description accurately.
           Motion: Smooth cinematic pans.
           Duration: 8 seconds. High-fidelity spatial audio.
         `;
+}
+
+console.log("Generating video with prompt:", prompt);
+
+const client = this.getClient();
+
+// 1. START ASYNC GENERATION
+const generationOp = await client.models.generateVideos({
+  model: 'veo-3.1-generate-preview',
+  prompt: prompt
+});
+
+console.log("[GeminiService] generationOp raw:", generationOp);
+
+if (!generationOp) {
+  throw new Error("Video generation request returned no data (undefined). Check your API key and permissions.");
+}
+
+const operationName = generationOp.name;
+if (!operationName) {
+  // Log generationOp keys very clearly to understand failure
+  const keys = generationOp ? Object.keys(generationOp).join(', ') : 'null/undefined';
+  console.error("[GeminiService] generationOp does not have a 'name' property. Keys:", keys);
+
+  // Final attempt to find a name property (sometimes nested)
+  const nestedName = (generationOp as any).operation?.name || (generationOp as any).metadata?.name;
+  if (!nestedName) {
+    throw new Error(`Video generation started but operation name is missing. Response structure: ${keys}`);
+  }
+
+  console.log(`[GeminiService] Found operation name in nested property: ${nestedName}`);
+  (generationOp as any).name = nestedName; // Self-heal for the loop
+}
+
+const verifiedOperationName = generationOp.name;
+console.log(`[GeminiService] Video generation started. Operation: ${verifiedOperationName}`);
+
+// 2. POLL FOR COMPLETION
+let operation: any = null;
+const startTime = Date.now();
+const MAX_POLL_TIME = 420000; // 7 minutes limit
+const POLL_INTERVAL = 10000; // 10 seconds
+
+console.log(`[GeminiService] Starting polling for: ${operationName}`);
+
+while (true) {
+  if (Date.now() - startTime > MAX_POLL_TIME) {
+    throw new Error("Video generation timed out (7 minute limit reached).");
+  }
+
+  try {
+    // Attempt 1: Standard wait() on the operation (BEST)
+    if (generationOp && typeof (generationOp as any).wait === 'function') {
+      operation = await (generationOp as any).wait();
+    }
+    // Attempt 2: Via models service (Common in browser)
+    else if ((client as any).models && typeof (client as any).models.getOperation === 'function') {
+      operation = await (client as any).models.getOperation({ name: operationName });
+    }
+    // Attempt 3: Root level getOperation
+    else if (typeof (client as any).getOperation === 'function') {
+      operation = await (client as any).getOperation({ name: operationName });
+    }
+    // Attempt 4: Standard operations service (if it exists and works)
+    else if (client.operations && typeof client.operations.get === 'function') {
+      try {
+        operation = await client.operations.get({ name: operationName });
+      } catch {
+        // Ignore failure here as we'll loop or try root
+        // @ts-ignore
+        operation = await client.operations.get(operationName);
       }
+    }
+    else {
+      throw new Error("No valid polling method found on Gemini client.");
+    }
 
-      console.log("Generating video with prompt:", prompt);
+    if (operation && operation.done) {
+      console.log("[GeminiService] Video generation complete.");
+      break;
+    }
 
-      const client = this.getClient();
+    if (operation) {
+      console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
+    }
+  } catch (pollError: any) {
+    console.warn("[GeminiService] Polling check encountered error:", pollError.message);
+    // If it's a timeout, propagates. Others, we wait and retry.
+    if (pollError.message?.includes("timed out")) throw pollError;
+  }
 
-      // 1. START ASYNC GENERATION
-      const generationOp = await client.models.generateVideos({
-        model: 'veo-3.1-generate-preview',
-        prompt: prompt
-      });
+  console.log(`[GeminiService] Polling... Next check in ${POLL_INTERVAL / 1000}s`);
+  await new Promise(r => setTimeout(r, POLL_INTERVAL));
+}
 
-      console.log("[GeminiService] generationOp raw:", generationOp);
+// 3. HANDLE RESPONSE
+if (operation.error) {
+  console.error("[GeminiService] Video operation error:", operation.error);
+  throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
+}
 
-      if (!generationOp) {
-        throw new Error("Video generation request returned no data (undefined). Check your API key and permissions.");
-      }
+const response = operation.response;
+if (!response) {
+  console.error("[GeminiService] Operation done but no response:", JSON.stringify(operation, null, 2));
+  throw new Error("Video generation completed but returned an empty response.");
+}
 
-      const operationName = generationOp.name;
-      if (!operationName) {
-        // Log generationOp keys very clearly to understand failure
-        const keys = generationOp ? Object.keys(generationOp).join(', ') : 'null/undefined';
-        console.error("[GeminiService] generationOp does not have a 'name' property. Keys:", keys);
+// Log the full response for debugging
+console.log("[GeminiService] Video operation response keys:", Object.keys(response));
+if (response.video) console.log("[GeminiService] response.video keys:", Object.keys(response.video));
 
-        // Final attempt to find a name property (sometimes nested)
-        const nestedName = (generationOp as any).operation?.name || (generationOp as any).metadata?.name;
-        if (!nestedName) {
-          throw new Error(`Video generation started but operation name is missing. Response structure: ${keys}`);
-        }
+const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0] || response;
+const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/')) ||
+  videoCandidate?.inlineData ||
+  (videoCandidate?.video ? videoCandidate.video : null);
 
-        console.log(`[GeminiService] Found operation name in nested property: ${nestedName}`);
-        (generationOp as any).name = nestedName; // Self-heal for the loop
-      }
+if (videoPart && videoPart.inlineData) {
+  return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
+} else if (videoCandidate?.data && videoCandidate?.mimeType) {
+  // Direct inlineData structure
+  return `data:${videoCandidate.mimeType};base64,${videoCandidate.data}`;
+} else if (response.video?.data && response.video?.mimeType) {
+  // Nested video data
+  return `data:${response.video.mimeType};base64,${response.video.data}`;
+}
 
-      const verifiedOperationName = generationOp.name;
-      console.log(`[GeminiService] Video generation started. Operation: ${verifiedOperationName}`);
+// Fallback: Check if it's in a different property
+if (response.video?.uri || response.uri) {
+  throw new Error("Video generated but returned as URI which is not yet supported in this flow. Please ensure your API key supports inline data returns.");
+}
 
-      // 2. POLL FOR COMPLETION
-      let operation: any = null;
-      const startTime = Date.now();
-      const MAX_POLL_TIME = 420000; // 7 minutes limit
-      const POLL_INTERVAL = 10000; // 10 seconds
-
-      console.log(`[GeminiService] Starting polling for: ${operationName}`);
-
-      while (true) {
-        if (Date.now() - startTime > MAX_POLL_TIME) {
-          throw new Error("Video generation timed out (7 minute limit reached).");
-        }
-
-        try {
-          // Attempt 1: Standard wait() on the operation (BEST)
-          if (generationOp && typeof (generationOp as any).wait === 'function') {
-            operation = await (generationOp as any).wait();
-          }
-          // Attempt 2: Via models service (Common in browser)
-          else if ((client as any).models && typeof (client as any).models.getOperation === 'function') {
-            operation = await (client as any).models.getOperation({ name: operationName });
-          }
-          // Attempt 3: Root level getOperation
-          else if (typeof (client as any).getOperation === 'function') {
-            operation = await (client as any).getOperation({ name: operationName });
-          }
-          // Attempt 4: Standard operations service (if it exists and works)
-          else if (client.operations && typeof client.operations.get === 'function') {
-            try {
-              operation = await client.operations.get({ name: operationName });
-            } catch {
-              // Ignore failure here as we'll loop or try root
-              // @ts-ignore
-              operation = await client.operations.get(operationName);
-            }
-          }
-          else {
-            throw new Error("No valid polling method found on Gemini client.");
-          }
-
-          if (operation && operation.done) {
-            console.log("[GeminiService] Video generation complete.");
-            break;
-          }
-
-          if (operation) {
-            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-          }
-        } catch (pollError: any) {
-          console.warn("[GeminiService] Polling check encountered error:", pollError.message);
-          // If it's a timeout, propagates. Others, we wait and retry.
-          if (pollError.message?.includes("timed out")) throw pollError;
-        }
-
-        console.log(`[GeminiService] Polling... Next check in ${POLL_INTERVAL / 1000}s`);
-        await new Promise(r => setTimeout(r, POLL_INTERVAL));
-      }
-
-      // 3. HANDLE RESPONSE
-      if (operation.error) {
-        console.error("[GeminiService] Video operation error:", operation.error);
-        throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
-      }
-
-      const response = operation.response;
-      if (!response) {
-        console.error("[GeminiService] Operation done but no response:", JSON.stringify(operation, null, 2));
-        throw new Error("Video generation completed but returned an empty response.");
-      }
-
-      // Log the full response for debugging
-      console.log("[GeminiService] Video operation response keys:", Object.keys(response));
-      if (response.video) console.log("[GeminiService] response.video keys:", Object.keys(response.video));
-
-      const videoCandidate = response.candidates?.[0] || response.videoCandidates?.[0] || response;
-      const videoPart = videoCandidate?.content?.parts?.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith('video/')) ||
-        videoCandidate?.inlineData ||
-        (videoCandidate?.video ? videoCandidate.video : null);
-
-      if (videoPart && videoPart.inlineData) {
-        return `data:${videoPart.inlineData.mimeType};base64,${videoPart.inlineData.data}`;
-      } else if (videoCandidate?.data && videoCandidate?.mimeType) {
-        // Direct inlineData structure
-        return `data:${videoCandidate.mimeType};base64,${videoCandidate.data}`;
-      } else if (response.video?.data && response.video?.mimeType) {
-        // Nested video data
-        return `data:${response.video.mimeType};base64,${response.video.data}`;
-      }
-
-      // Fallback: Check if it's in a different property
-      if (response.video?.uri || response.uri) {
-        throw new Error("Video generated but returned as URI which is not yet supported in this flow. Please ensure your API key supports inline data returns.");
-      }
-
-      console.error("[GeminiService] Video response structure unknown:", JSON.stringify(response, null, 2));
-      throw new Error("No video data found in the generation response. Please check the console for structure details.");
+console.error("[GeminiService] Video response structure unknown:", JSON.stringify(response, null, 2));
+throw new Error("No video data found in the generation response. Please check the console for structure details.");
 
     } catch (error: any) {
-      console.error("Storyboard video generation failed:", error);
+  console.error("Storyboard video generation failed:", error);
 
-      const errorMessage = error.message || String(error);
+  const errorMessage = error.message || String(error);
 
-      // Specialize 429 Quota error for better user feedback
-      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.toLowerCase().includes("quota")) {
-        throw new Error("VIDEO QUOTA EXCEEDED: Veo 3.1 video generation is highly limited. Please check your Google AI Studio quota or try a smaller project. You may need to enable billing if you are on a free tier.");
-      }
+  // Specialize 429 Quota error for better user feedback
+  if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.toLowerCase().includes("quota")) {
+    throw new Error("VIDEO QUOTA EXCEEDED: Veo 3.1 video generation is highly limited. Please check your Google AI Studio quota or try a smaller project. You may need to enable billing if you are on a free tier.");
+  }
 
-      throw new Error(errorMessage);
-    }
+  throw new Error(errorMessage);
+}
   }
 
   // Generate TTS audio
-  async generateSpeech(text: string, voiceName: string = 'Puck'): Promise<string> {
-    try {
-      // Wrapped in timeout to prevent hanging if the API is slow
-      const response = await withTimeout<GenerateContentResponse>(
-        this.getClient().models.generateContent({
-          model: 'gemini-2.5-flash-preview-tts',
-          contents: [{ role: 'user', parts: [{ text }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName }
-              }
-            },
-            // Unified SDK prefers snake_case for many parameters
-            // @ts-ignore
-            audio_config: {
-              audio_encoding: 'MP3'
+  async generateSpeech(text: string, voiceName: string = 'Puck'): Promise < string > {
+  try {
+    // Wrapped in timeout to prevent hanging if the API is slow
+    const response = await withTimeout<GenerateContentResponse>(
+      this.getClient().models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [{ role: 'user', parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName }
             }
+          },
+          // Unified SDK prefers snake_case for many parameters
+          // @ts-ignore
+          audio_config: {
+            audio_encoding: 'MP3'
           }
-        }),
-        20000,
-        "Audio generation timed out"
-      );
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      const base64Audio = part?.inlineData?.data;
+        }
+      }),
+      20000,
+      "Audio generation timed out"
+    );
+    const part = response.candidates?.[0]?.content?.parts?.[0];
+    const base64Audio = part?.inlineData?.data;
 
-      if (!base64Audio) {
-        throw new Error("No audio generated. Check AI safety settings or dialogue content.");
-      }
+    if(!base64Audio) {
+      throw new Error("No audio generated. Check AI safety settings or dialogue content.");
+    }
 
       // WRAP RAW PCM IN WAV HEADER
       const wavBase64 = addWavHeader(base64Audio, 24000);
 
-      return `data:audio/wav;base64,${wavBase64}`;
+    return `data:audio/wav;base64,${wavBase64}`;
 
-    } catch (error: any) {
-      console.error("Speech generation failed:", error);
-      const errorMessage = error.message || String(error);
+  } catch(error: any) {
+    console.error("Speech generation failed:", error);
+    const errorMessage = error.message || String(error);
 
-      if (errorMessage.includes("403") || errorMessage.toLowerCase().includes("permission") || errorMessage.toLowerCase().includes("api key")) {
-        throw new Error("Audio generation is not enabled for this API key yet. Please ensure you are using a key from a region that supports Gemini 2.0 Audio.");
-      }
-
-      throw new Error(`Audio generation failed: ${errorMessage}`);
+    if (errorMessage.includes("403") || errorMessage.toLowerCase().includes("permission") || errorMessage.toLowerCase().includes("api key")) {
+      throw new Error("Audio generation is not enabled for this API key yet. Please ensure you are using a key from a region that supports Gemini 2.0 Audio.");
     }
+
+    throw new Error(`Audio generation failed: ${errorMessage}`);
   }
+}
 }
 
 export const gemini = new GeminiService();
