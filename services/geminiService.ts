@@ -454,11 +454,22 @@ IMPORTANT: The background MUST match the Setting description accurately.
 
       const operationName = generationOp.name;
       if (!operationName) {
-        console.error("[GeminiService] generationOp keys:", Object.keys(generationOp));
-        throw new Error(`Video generation started but no operation name was returned. Keys: ${Object.keys(generationOp).join(', ')}`);
+        // Log generationOp keys very clearly to understand failure
+        const keys = generationOp ? Object.keys(generationOp).join(', ') : 'null/undefined';
+        console.error("[GeminiService] generationOp does not have a 'name' property. Keys:", keys);
+
+        // Final attempt to find a name property (sometimes nested)
+        const nestedName = (generationOp as any).operation?.name || (generationOp as any).metadata?.name;
+        if (!nestedName) {
+          throw new Error(`Video generation started but operation name is missing. Response structure: ${keys}`);
+        }
+
+        console.log(`[GeminiService] Found operation name in nested property: ${nestedName}`);
+        (generationOp as any).name = nestedName; // Self-heal for the loop
       }
-      console.log(`[GeminiService] Video generation started. Operation: ${operationName}`);
-      console.log(`[GeminiService] Full generationOp:`, JSON.stringify(generationOp, null, 2));
+
+      const verifiedOperationName = generationOp.name;
+      console.log(`[GeminiService] Video generation started. Operation: ${verifiedOperationName}`);
 
       // 2. POLL FOR COMPLETION
       let operation: any;
@@ -466,61 +477,43 @@ IMPORTANT: The background MUST match the Setting description accurately.
       const MAX_POLL_TIME = 420000; // 7 minutes limit (videos take time)
       const POLL_INTERVAL = 10000; // 10 seconds between checks
 
-      // OPTION A: If the SDK provides a wait() method, use it!
-      // Many modern Google SDKs return an operation-like object with .wait()
-      if (typeof (generationOp as any).wait === 'function') {
-        console.log("[GeminiService] Using generationOp.wait()...");
-        try {
-          operation = await (generationOp as any).wait();
-        } catch (waitError: any) {
-          console.error("[GeminiService] operation.wait() failed:", waitError.message);
-          // Fall through to manual polling if wait() fails
+      // Robust operation polling
+      console.log(`[GeminiService] Starting polling loop for operation: ${operationName}`);
+
+      while (true) {
+        if (Date.now() - startTime > MAX_POLL_TIME) {
+          throw new Error("Video generation timed out (7 minute limit reached).");
         }
-      }
 
-      // OPTION B: Manual Polling loop (Fallback or Primary)
-      if (!operation || !operation.done) {
-        console.log("[GeminiService] Starting manual polling loop...");
-        while (true) {
-          if (Date.now() - startTime > MAX_POLL_TIME) {
-            throw new Error("Video generation timed out (7 minute limit reached).");
-          }
-
+        try {
+          // The most reliable way to poll in the new SDK is usually client.operations.get({ name })
+          // But we'll try a few variations if it fails
           try {
-            // The unified SDK operations.get expects { name: string }
             operation = await client.operations.get({ name: operationName });
-            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-          } catch (pollError: any) {
-            console.warn("[GeminiService] client.operations.get failed:", pollError.message);
-
-            // SECOND FALLBACK: Try passing string directly if object fails
-            try {
-              // @ts-ignore
-              operation = await client.operations.get(operationName);
-              console.log(`[GeminiService] client.operations.get (string) status: ${operation.done ? 'DONE' : 'PENDING'}`);
-            } catch (strPollError: any) {
-              // LAST RESORT: Try getVideosOperation if it somehow exists (maybe renamed in some versions)
-              try {
-                // @ts-ignore
-                if (typeof client.operations.getVideosOperation === 'function') {
-                  operation = await (client.operations as any).getVideosOperation({ name: operationName });
-                } else {
-                  throw strPollError;
-                }
-              } catch (finalError: any) {
-                throw new Error(`Polling failed after multiple attempts. Last error: ${finalError.message}`);
-              }
-            }
+          } catch (firstTryErr: any) {
+            console.warn("[GeminiService] client.operations.get({name}) failed, trying direct string...", firstTryErr.message);
+            // @ts-ignore
+            operation = await client.operations.get(operationName);
           }
 
-          if (operation && operation.done) {
+          if (!operation) {
+            throw new Error(`Polling returned null or undefined operation for ${operationName}`);
+          }
+
+          console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
+
+          if (operation.done) {
             console.log("[GeminiService] Video generation operation complete.");
             break;
           }
-
-          console.log(`[GeminiService] Polling video operation: ${operationName}... Next check in ${POLL_INTERVAL / 1000}s`);
-          await new Promise(r => setTimeout(r, POLL_INTERVAL));
+        } catch (pollError: any) {
+          console.error("[GeminiService] Critical polling error:", pollError.message);
+          // If we hit a hard error, we should probably stop to avoid infinite wait
+          throw new Error(`Polling failed: ${pollError.message}`);
         }
+
+        console.log(`[GeminiService] Polling video operation: ${operationName}... Next check in ${POLL_INTERVAL / 1000}s`);
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
 
       // 3. HANDLE RESPONSE
