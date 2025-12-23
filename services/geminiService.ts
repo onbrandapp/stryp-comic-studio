@@ -407,8 +407,10 @@ IMPORTANT: The background MUST match the Setting description accurately.
   // Generate a video for a storyboard
   async generateStoryboardVideo(
     storyboardDescription: string,
+    dialogue: string = '',
     character?: Character,
-    location?: Location
+    location?: Location,
+    allCharacters: Character[] = []
   ): Promise<string> {
     try {
       let prompt = '';
@@ -416,30 +418,35 @@ IMPORTANT: The background MUST match the Setting description accurately.
       let locationContext = '';
 
       if (location && location.visualDescription) {
-        locationContext = `SETTING: ${location.visualDescription}`;
+        locationContext = `SETTING / BACKGROUND REFERENCE: ${location.visualDescription}`;
       }
 
-      if (character) {
-        visualDescription = await this.getCharacterVisualDescription(character);
-        prompt = `
-          High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
-          Style: Vibrant colors, professional lighting, expressive character animation.
-          Character: ${visualDescription}.
-          Action: ${storyboardDescription}.
-          ${locationContext}
-          Motion: Dynamic but smooth camera work.
-          Duration: 8 seconds. High-fidelity spatial audio.
-        `;
-      } else {
-        prompt = `
-          High-end 3D animated cinematic video, 8K resolution, Pixar and Disney influence.
-          Style: Vibrant colors, professional lighting.
-          Action: ${storyboardDescription}.
-          ${locationContext}
-          Motion: Smooth cinematic pans.
-          Duration: 8 seconds. High-fidelity spatial audio.
-        `;
-      }
+      // Group all character descriptions for consistency
+      const characterContext = allCharacters.length > 0
+        ? "GLOBAL CHARACTER REFERENCE (Maintain consistency with these appearances):\n" +
+        (await Promise.all(allCharacters.map(async c => `- ${c.name}: ${await this.getCharacterVisualDescription(c)}`))).join('\n')
+        : (character ? `SUBJECT REFERENCE: ${await this.getCharacterVisualDescription(character)}` : '');
+
+      prompt = `
+(TECHNICAL SPECS): High-end 3D animated cinematic video, 8K resolution, Pixar/Disney style. Vibrant colors, professional cinematic lighting.
+
+(CHARACTERS & SUBJECTS):
+${characterContext}
+
+(ACTION / SCENE):
+${storyboardDescription}
+
+(AUDIO & DIALOGUE - CRITICAL):
+STORYBOARD DIALOGUE: "${dialogue || 'No dialogue, just ambient sound'}"
+INSTRUCTION: The character "${character?.name || 'the subject'}" MUST speak the Storyboard Dialogue clearly. 
+SOUND QUALITY: Loud, crystal-clear professional voiceover. High-fidelity spatial audio.
+
+(SETTING):
+${locationContext || 'Environment matches the action mood.'}
+IMPORTANT: Stick strictly to the provided characters and setting. Do NOT invent new animals, creatures, or characters.
+
+(MOTION): Dynamic but smooth cinematic camera work.
+(DURATION): 8 seconds.`;
 
       console.log("Generating video with prompt:", prompt);
 

@@ -455,8 +455,10 @@ const Studio: React.FC<Props> = ({ project, characters, settings, user, onUpdate
 
       const base64VideoDataUrl = await gemini.generateStoryboardVideo(
         storyboard.description,
+        storyboard.dialogue,
         character,
-        activeLocation
+        activeLocation,
+        characters
       );
 
       setStoryboards(prev => {
