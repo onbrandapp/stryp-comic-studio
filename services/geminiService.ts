@@ -128,19 +128,21 @@ async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data
 
 
 class GeminiService {
-  private client: any = null;
+  private clientInstance: any = null;
+
+  private getApiKey(): string {
+    return import.meta.env.VITE_GEMINI_API_KEY ||
+      import.meta.env.GEMINI_API_KEY ||
+      (typeof process !== 'undefined' ? (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY) : '') ||
+      '';
+  }
 
   private getClient() {
-    if (this.client) return this.client;
+    if (this.clientInstance) return this.clientInstance;
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
-      import.meta.env.GEMINI_API_KEY ||
-      (typeof process !== 'undefined' ? process.env.VITE_GEMINI_API_KEY : '') ||
-      (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') ||
-      '';
-
-    this.client = new GoogleGenAI({ apiKey });
-    return this.client;
+    const apiKey = this.getApiKey();
+    this.clientInstance = new GoogleGenAI({ apiKey });
+    return this.clientInstance;
   }
 
   // Generate a script (list of storyboards)
@@ -474,13 +476,18 @@ IMPORTANT: The background MUST match the Setting description accurately.
       const verifiedOperationName = generationOp.name;
       console.log(`[GeminiService] Video generation started. Operation: ${verifiedOperationName}`);
 
-      // 2. POLL FOR COMPLETION
+      // 2. POLL FOR COMPLETION (Using Direct REST API for maximum reliability)
       let operation: any = null;
       const startTime = Date.now();
-      const MAX_POLL_TIME = 420000; // 7 minutes limit
+      const MAX_POLL_TIME = 420000; // 7 minutes
       const POLL_INTERVAL = 10000; // 10 seconds
 
-      console.log(`[GeminiService] Starting polling for: ${operationName}`);
+      const apiKey = this.getApiKey();
+      // Ensure operationName is clean (e.g., models/...)
+      const cleanOpName = operationName.startsWith('operations/') ? `models/veo-3.1-generate-preview/${operationName}` : operationName;
+      const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanOpName}?key=${apiKey}`;
+
+      console.log(`[GeminiService] Starting REST polling at: ${pollUrl}`);
 
       while (true) {
         if (Date.now() - startTime > MAX_POLL_TIME) {
@@ -488,47 +495,25 @@ IMPORTANT: The background MUST match the Setting description accurately.
         }
 
         try {
-          // Attempt 1: Standard wait() on the operation (BEST)
-          if (generationOp && typeof (generationOp as any).wait === 'function') {
-            operation = await (generationOp as any).wait();
-          }
-          // Attempt 2: Via models service (Common in browser)
-          else if ((client as any).models && typeof (client as any).models.getOperation === 'function') {
-            operation = await (client as any).models.getOperation({ name: operationName });
-          }
-          // Attempt 3: Root level getOperation
-          else if (typeof (client as any).getOperation === 'function') {
-            operation = await (client as any).getOperation({ name: operationName });
-          }
-          // Attempt 4: Standard operations service (if it exists and works)
-          else if (client.operations && typeof client.operations.get === 'function') {
-            try {
-              operation = await client.operations.get({ name: operationName });
-            } catch {
-              // Ignore failure here as we'll loop or try root
-              // @ts-ignore
-              operation = await client.operations.get(operationName);
+          const resp = await fetch(pollUrl);
+          if (!resp.ok) {
+            console.warn(`[GeminiService] Polling HTTP error: ${resp.status}`);
+          } else {
+            const data = await resp.json();
+            operation = data;
+
+            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
+
+            if (operation.done) {
+              console.log("[GeminiService] Video generation complete.");
+              break;
             }
           }
-          else {
-            throw new Error("No valid polling method found on Gemini client.");
-          }
-
-          if (operation && operation.done) {
-            console.log("[GeminiService] Video generation complete.");
-            break;
-          }
-
-          if (operation) {
-            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-          }
         } catch (pollError: any) {
-          console.warn("[GeminiService] Polling check encountered error:", pollError.message);
-          // If it's a timeout, propagates. Others, we wait and retry.
-          if (pollError.message?.includes("timed out")) throw pollError;
+          console.warn("[GeminiService] REST Polling failed:", pollError.message);
         }
 
-        console.log(`[GeminiService] Polling... Next check in ${POLL_INTERVAL / 1000}s`);
+        console.log(`[GeminiService] Waiting ${POLL_INTERVAL / 1000}s before next REST check...`);
         await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
 
