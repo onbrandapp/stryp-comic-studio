@@ -472,13 +472,12 @@ IMPORTANT: The background MUST match the Setting description accurately.
       console.log(`[GeminiService] Video generation started. Operation: ${verifiedOperationName}`);
 
       // 2. POLL FOR COMPLETION
-      let operation: any;
+      let operation: any = null;
       const startTime = Date.now();
-      const MAX_POLL_TIME = 420000; // 7 minutes limit (videos take time)
-      const POLL_INTERVAL = 10000; // 10 seconds between checks
+      const MAX_POLL_TIME = 420000; // 7 minutes limit
+      const POLL_INTERVAL = 10000; // 10 seconds
 
-      // Robust operation polling
-      console.log(`[GeminiService] Starting polling loop for operation: ${operationName}`);
+      console.log(`[GeminiService] Starting polling for: ${operationName}`);
 
       while (true) {
         if (Date.now() - startTime > MAX_POLL_TIME) {
@@ -486,33 +485,47 @@ IMPORTANT: The background MUST match the Setting description accurately.
         }
 
         try {
-          // The most reliable way to poll in the new SDK is usually client.operations.get({ name })
-          // But we'll try a few variations if it fails
-          try {
-            operation = await client.operations.get({ name: operationName });
-          } catch (firstTryErr: any) {
-            console.warn("[GeminiService] client.operations.get({name}) failed, trying direct string...", firstTryErr.message);
-            // @ts-ignore
-            operation = await client.operations.get(operationName);
+          // Attempt 1: Standard wait() on the operation (BEST)
+          if (generationOp && typeof (generationOp as any).wait === 'function') {
+            operation = await (generationOp as any).wait();
+          }
+          // Attempt 2: Via models service (Common in browser)
+          else if ((client as any).models && typeof (client as any).models.getOperation === 'function') {
+            operation = await (client as any).models.getOperation({ name: operationName });
+          }
+          // Attempt 3: Root level getOperation
+          else if (typeof (client as any).getOperation === 'function') {
+            operation = await (client as any).getOperation({ name: operationName });
+          }
+          // Attempt 4: Standard operations service (if it exists and works)
+          else if (client.operations && typeof client.operations.get === 'function') {
+            try {
+              operation = await client.operations.get({ name: operationName });
+            } catch {
+              // Ignore failure here as we'll loop or try root
+              // @ts-ignore
+              operation = await client.operations.get(operationName);
+            }
+          }
+          else {
+            throw new Error("No valid polling method found on Gemini client.");
           }
 
-          if (!operation) {
-            throw new Error(`Polling returned null or undefined operation for ${operationName}`);
-          }
-
-          console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
-
-          if (operation.done) {
-            console.log("[GeminiService] Video generation operation complete.");
+          if (operation && operation.done) {
+            console.log("[GeminiService] Video generation complete.");
             break;
           }
+
+          if (operation) {
+            console.log(`[GeminiService] Operation status: ${operation.done ? 'DONE' : 'PENDING'}`);
+          }
         } catch (pollError: any) {
-          console.error("[GeminiService] Critical polling error:", pollError.message);
-          // If we hit a hard error, we should probably stop to avoid infinite wait
-          throw new Error(`Polling failed: ${pollError.message}`);
+          console.warn("[GeminiService] Polling check encountered error:", pollError.message);
+          // If it's a timeout, propagates. Others, we wait and retry.
+          if (pollError.message?.includes("timed out")) throw pollError;
         }
 
-        console.log(`[GeminiService] Polling video operation: ${operationName}... Next check in ${POLL_INTERVAL / 1000}s`);
+        console.log(`[GeminiService] Polling... Next check in ${POLL_INTERVAL / 1000}s`);
         await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
 
