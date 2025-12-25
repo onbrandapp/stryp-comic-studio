@@ -129,11 +129,19 @@ async function fetchMediaAsBase64(url: string): Promise<{ mimeType: string; data
 
 class GeminiService {
   private clientInstance: any = null;
+  private location: string = 'us-central1';
 
   private getApiKey(): string {
     return import.meta.env.VITE_GEMINI_API_KEY ||
       import.meta.env.GEMINI_API_KEY ||
       (typeof process !== 'undefined' ? (process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY) : '') ||
+      '';
+  }
+
+  private getProjectId(): string {
+    return import.meta.env.VITE_FIREBASE_PROJECT_ID ||
+      import.meta.env.FIREBASE_PROJECT_ID ||
+      (typeof process !== 'undefined' ? (process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID) : '') ||
       '';
   }
 
@@ -450,14 +458,25 @@ IMPORTANT: Stick strictly to the provided characters and setting. Do NOT invent 
 
       console.log("Generating video with prompt:", prompt);
 
-      const client = this.getClient();
+      // 1. START ASYNC GENERATION (Switch to Regional Vertex AI REST)
+      const apiKey = this.getApiKey();
+      const projectId = this.getProjectId();
+      const endpoint = `https://${this.location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${this.location}/publishers/google/models/veo-3.1-generate-preview:generateVideos?key=${apiKey}`;
 
-      // 1. START ASYNC GENERATION
-      const generationOp = await client.models.generateVideos({
-        model: 'veo-3.1-generate-preview',
-        prompt: prompt
+      const generateResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: prompt
+        })
       });
 
+      if (!generateResponse.ok) {
+        const errData = await generateResponse.json().catch(() => ({}));
+        throw new Error(`Cloud project API Error (${generateResponse.status}): ${errData.error?.message || 'Check your Vertex AI API status in us-central1'}`);
+      }
+
+      const generationOp = await generateResponse.json();
       console.log("[GeminiService] generationOp raw:", generationOp);
 
       if (!generationOp) {
@@ -486,15 +505,12 @@ IMPORTANT: Stick strictly to the provided characters and setting. Do NOT invent 
       // 2. POLL FOR COMPLETION (Using Direct REST API for maximum reliability)
       let operation: any = null;
       const startTime = Date.now();
-      const MAX_POLL_TIME = 420000; // 7 minutes
+      const MAX_POLL_TIME = 7 * 60 * 1000; // 7 minutes
       const POLL_INTERVAL = 10000; // 10 seconds
 
-      const apiKey = this.getApiKey();
-      // Ensure operationName is clean (e.g., models/...)
-      const cleanOpName = operationName.startsWith('operations/') ? `models/veo-3.1-generate-preview/${operationName}` : operationName;
-      const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanOpName}?key=${apiKey}`;
+      const pollUrl = `https://${this.location}-aiplatform.googleapis.com/v1beta1/${operationName}?key=${apiKey}`;
 
-      console.log(`[GeminiService] Starting REST polling at: ${pollUrl}`);
+      console.log(`[GeminiService] Starting REST polling at ${pollUrl}...`);
 
       while (true) {
         if (Date.now() - startTime > MAX_POLL_TIME) {
@@ -590,32 +606,41 @@ IMPORTANT: Stick strictly to the provided characters and setting. Do NOT invent 
     }
   }
 
-  // Generate TTS audio
+  // Generate TTS audio (Switch to Regional Vertex AI REST)
   async generateSpeech(text: string, voiceName: string = 'Puck'): Promise<string> {
     try {
-      // Wrapped in timeout to prevent hanging if the API is slow
-      const response = await withTimeout<GenerateContentResponse>(
-        this.getClient().models.generateContent({
-          model: 'gemini-2.5-flash-preview-tts',
-          contents: [{ role: 'user', parts: [{ text }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName }
+      const apiKey = this.getApiKey();
+      const projectId = this.getProjectId();
+      const endpoint = `https://${this.location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${this.location}/publishers/google/models/gemini-2.0-flash-exp:streamGenerateContent?key=${apiKey}`;
+
+      const response = await withTimeout(
+        fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text }] }],
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName }
+                }
               }
-            },
-            // Unified SDK prefers snake_case for many parameters
-            // @ts-ignore
-            audio_config: {
-              audio_encoding: 'MP3'
             }
-          }
+          })
         }),
         20000,
         "Audio generation timed out"
       );
-      const part = response.candidates?.[0]?.content?.parts?.[0];
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(`Speech API Error: ${errData.error?.message || response.statusText}`);
+      }
+
+      // Vertex stream response comes as an array or newline-delimited JSON
+      const data = await response.json();
+      const part = data[0]?.candidates?.[0]?.content?.parts?.[0] || data.candidates?.[0]?.content?.parts?.[0];
       const base64Audio = part?.inlineData?.data;
 
       if (!base64Audio) {
